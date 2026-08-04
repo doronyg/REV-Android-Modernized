@@ -55,6 +55,8 @@ import com.wowwee.revandroidsampleproject.fragments.RevConnectAIFragment.REVConn
 @SuppressLint("ValidFragment")
 public class DriveViewFragment extends BaseViewFragment implements OnTouchListener, REVConnectAIFragmentListener, RevConnectAICallback, RevAIPlayerFragmentListener {
 	public final static String BROADCAST_REVIVE = "com.revsampleproject.revive";
+	private static final String TAG = "REV-DriveFragment";
+	private boolean isReviveReceiverRegistered = false;
 
 	protected SurfaceView touchArea;
 
@@ -133,9 +135,17 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 	@Override
 	public void onDestroyView() {
 		super.onDestroyView();
+		Log.d(TAG, "onDestroyView(): isJoystickTimerRunning=" + isJoystickTimerRunning);
 
 		// Unregister broadcast
-		getActivity().unregisterReceiver(mBroadcast);
+		if (isReviveReceiverRegistered && getActivity() != null) {
+			try {
+				getActivity().unregisterReceiver(mBroadcast);
+			} catch (IllegalArgumentException ex) {
+				Log.w(TAG, "Receiver already unregistered.", ex);
+			}
+			isReviveReceiverRegistered = false;
+		}
 
 		if(leftJoystickDrawer != null) {
 			leftJoystickDrawer.destroy();
@@ -166,6 +176,7 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 	@Override
 	public void onPause() {
 		super.onPause();
+		Log.d(TAG, "onPause(): isJoystickTimerRunning=" + isJoystickTimerRunning);
 		if(joystickTimer != null) {
 			joystickTimer.cancel();
 			joystickTimer.purge();
@@ -177,6 +188,13 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 	@Override
 	public void onResume() {
 		super.onResume();
+		Log.d(TAG, "onResume()");
+
+		rev = REVPlayer.getInstance().getPlayerRev();
+		if (rev == null) {
+			rev = REVRobotFinder.getInstance().firstConnectedREV();
+		}
+		Log.d(TAG, "onResume(): rev=" + (rev != null ? rev.getName() : "<null>") + ", connectedCount=" + REVRobotFinder.getInstance().getmRevRobotConnectedList().size());
 
 		// Set car states
 		resumeDriveViewFragment();
@@ -189,10 +207,12 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 		}
 
 		if(REVRobotFinder.getInstance().firstConnectedREV() != null) {
+			Log.d(TAG, "onResume(): firstConnectedREV exists, enabling drive");
 			// Set tracking mode for player REV
 			REVRobotFinder.getInstance().firstConnectedREV().revSetTrackingMode(revRobotTrackingMode.REVTrackingUserControl);
 			setDriveEnabled(true);
 		} else {
+			Log.w(TAG, "onResume(): no connected REV, switching back to ScanFragment");
 			// Back to scan page if the REV is disconnected
 			FragmentHelper.switchFragment(getFragmentActivity().getSupportFragmentManager(), new ScanFragment(), R.id.view_id_content, false);
 		}
@@ -203,9 +223,19 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 	public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 		if (container == null)
 			return null;
+		Log.d(TAG, "onCreateView()");
 
-		// Register broadcast
-		getActivity().registerReceiver(mBroadcast, new IntentFilter(BROADCAST_REVIVE));
+		// Register broadcast with Android 13+ explicit export behavior.
+		if (getActivity() != null && !isReviveReceiverRegistered) {
+			IntentFilter reviveFilter = new IntentFilter(BROADCAST_REVIVE);
+			if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+				getActivity().registerReceiver(mBroadcast, reviveFilter, Context.RECEIVER_NOT_EXPORTED);
+			} else {
+				getActivity().registerReceiver(mBroadcast, reviveFilter);
+			}
+			isReviveReceiverRegistered = true;
+			Log.d(TAG, "Revive receiver registered. action=" + BROADCAST_REVIVE);
+		}
 
 		// Init weapon manager
 		WeaponManager.getInstance().Load(getFragmentActivity());
@@ -216,6 +246,17 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 		handler = new Handler();
 
 		view = super.onCreateView(inflater, container, savedInstanceState);
+
+		rev = REVPlayer.getInstance().getPlayerRev();
+		if (rev == null) {
+			rev = REVRobotFinder.getInstance().firstConnectedREV();
+		}
+		Log.d(TAG, "onCreateView(): rev=" + (rev != null ? rev.getName() : "<null>") + ", connectedCount=" + REVRobotFinder.getInstance().getmRevRobotConnectedList().size());
+		if (rev == null) {
+			Log.w(TAG, "DriveViewFragment opened without an active REV; returning to scan.");
+			FragmentHelper.switchFragment(getFragmentActivity().getSupportFragmentManager(), new ScanFragment(), R.id.view_id_content, false);
+			return view;
+		}
 
 		// Handle the touch area
 		touchArea = (SurfaceView)view.findViewById(R.id.view_id_touch_area);
@@ -375,6 +416,7 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 			@Override
 			public void run() {
 				revInControl = REVPlayer.getInstance().getPlayerRev();
+				Log.d(TAG, "resumeDriveViewFragment(): revInControl=" + (revInControl != null ? revInControl.getName() : "<null>") + ", connectedCount=" + REVRobotFinder.getInstance().getmRevRobotConnectedList().size());
 				if (revInControl != null)
 					revInControl.setCallbackInterface(DriveViewFragment.this);
 
@@ -710,18 +752,21 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 
 	@Override
 	public void revDeviceReady(REVRobot rev) {
+		Log.d(TAG, "revDeviceReady(): " + (rev != null ? rev.getName() : "<null>"));
 		// Do this when the REV is connected
 		refreshPlayerCarTrackingMode();
 	}
 
 	@Override
 	public void revDeviceDisconnected(REVRobot rev) {
+		Log.d(TAG, "revDeviceDisconnected(): " + (rev != null ? rev.getName() : "<null>"));
 		// Clear connected rev
 		REVRobotFinder.getInstance().clearFoundREVList();
 		FragmentActivity activity = getFragmentActivity();
 		if (activity != null) {
 			FragmentManager mgr = activity.getSupportFragmentManager();
 			if (mgr != null) {
+				Log.d(TAG, "revDeviceDisconnected(): switching back to ScanFragment");
 				// Go back to scan page
 				FragmentHelper.switchFragment(activity.getSupportFragmentManager(), new ScanFragment(), R.id.view_id_content, false);
 			}
@@ -804,6 +849,7 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 				public void run() {
 					final String action = intent.getAction();
 					if(action.equals(BROADCAST_REVIVE)){
+						Log.d(TAG, "Broadcast revive received");
 						// Refresh layout for revive
 						if(REVPlayer.getInstance().getPlayerRev() != null) {
 							tvHealth.setText(getString(R.string.health) + " " + REVPlayer.getInstance().getPlayerRev().health);
