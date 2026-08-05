@@ -491,7 +491,17 @@ public class ScanFragment extends BaseViewFragment {
                                 @Override
                                 public void run() {
                                     Log.d(getClass().getName(),"Go to game page.");
-                                    FragmentHelper.switchFragment(getFragmentActivity().getSupportFragmentManager(), new DriveViewFragment(), R.id.view_id_content, false);
+
+                                    if (true) {
+                                        String connectedRevAddress = safeRevAddress(REVPlayer.getInstance().getPlayerRev());
+                                        FragmentHelper.switchFragment(getFragmentActivity().getSupportFragmentManager(), DriverModeFragment.newInstance(connectedRevAddress), R.id.view_id_content, false);
+                                    }
+                                    else {
+                                        FragmentHelper.switchFragment(getFragmentActivity().getSupportFragmentManager(), new DriveViewFragment(), R.id.view_id_content, false);
+                                    }
+
+
+
                                 }
                             });
                         }
@@ -601,6 +611,18 @@ public class ScanFragment extends BaseViewFragment {
             return (name != null ? name : "<unnamed>") + " [" + address + "]";
         } catch (SecurityException ex) {
             return "<permission-denied-name> [" + address + "]";
+        }
+    }
+
+    private String safeRevAddress(REVRobot rev) {
+        if (rev == null || rev.getBluetoothDevice() == null) {
+            return null;
+        }
+
+        try {
+            return rev.getBluetoothDevice().getAddress();
+        } catch (SecurityException ex) {
+            return null;
         }
     }
 }
