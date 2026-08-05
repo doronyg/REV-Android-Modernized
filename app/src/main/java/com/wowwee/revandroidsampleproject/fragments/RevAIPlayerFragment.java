@@ -1,39 +1,31 @@
 package com.wowwee.revandroidsampleproject.fragments;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-
-import android.animation.ObjectAnimator;
 import android.os.Bundle;
-import android.os.Handler;
-import android.util.Log;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
-import android.widget.RelativeLayout;
-import android.widget.TextView;
 
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot;
 import com.wowwee.revandroidsampleproject.R;
 import com.wowwee.revandroidsampleproject.ai.AIPlayer;
 import com.wowwee.revandroidsampleproject.ai.AIPlayerManager;
 import com.wowwee.revandroidsampleproject.fragments.RevConnectAIFragment.SelectAICar;
-import com.wowwee.revandroidsampleproject.fragments.BaseViewFragment;
 
 public class RevAIPlayerFragment extends BaseViewFragment {
 
 	private SelectAICar aiCar;
 	private View view;
 	private AIPlayer aiPlayer;
-	
+
+	@Override
+	protected int layoutId() {
+		return R.layout.fragment_connect_aiplayer;
+	}
+
 	public RevAIPlayerFragment(SelectAICar aiCar) {
-		super(R.layout.fragment_connect_aiplayer);
 		this.aiCar = aiCar;
 	}
 

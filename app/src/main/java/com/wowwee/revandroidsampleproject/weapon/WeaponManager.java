@@ -1,17 +1,15 @@
 package com.wowwee.revandroidsampleproject.weapon;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.lang.reflect.Type;
-import java.util.List;
+import android.content.Context;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.wowwee.bluetoothrobotcontrollib.rev.util.GunShotData;
 
-import android.content.Context;
-import android.util.Log;
-import android.widget.Spinner;
+import java.io.IOException;
+import java.io.InputStream;
+import java.lang.reflect.Type;
+import java.util.List;
 
 public class WeaponManager  {
 	private final String WEAPON_JSON_FILE_NAME = "WeaponGunIDMap.json";

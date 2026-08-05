@@ -6,18 +6,17 @@ import android.content.Intent;
 import android.os.Handler;
 import android.os.Looper;
 import android.support.v4.app.FragmentActivity;
-import android.util.Log;
 
 import com.wowwee.bluetoothrobotcontrollib.rev.REVCommandValues;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotConstant;
+import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotConstant.revRobotTrackingMode;
 import com.wowwee.bluetoothrobotcontrollib.rev.util.GunShotData;
 import com.wowwee.revandroidsampleproject.R;
 import com.wowwee.revandroidsampleproject.ai.AIAssistant;
 import com.wowwee.revandroidsampleproject.ai.AIPlayer;
 import com.wowwee.revandroidsampleproject.fragments.DriveViewFragment;
 import com.wowwee.revandroidsampleproject.weapon.WeaponManager;
-import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotConstant.revRobotTrackingMode;
 
 /**
  * Created by yinlau on 28/1/16.

@@ -4,7 +4,6 @@ import android.content.Context;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.MotionEvent;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -15,7 +14,6 @@ import com.wowwee.revandroidsampleproject.R;
 public class JoystickView extends FrameLayout {
 	private float frameRadius;
 	private float joystickCenterRadius;
-	private Context context;
 	private ImageView joystickFrame;
 	private ImageView joystickCenter;
 	private MotionEvent touchToTrack;
@@ -31,24 +29,20 @@ public class JoystickView extends FrameLayout {
 	
 	public JoystickView(Context context) {
 		super(context);
-		
-		this.init(context);
+		this.init();
 	}
 
 	public JoystickView(Context context, AttributeSet attrs) {
 		super(context, attrs);
-		
-		this.init(context);		
+		this.init();
 	}
 	
 	public JoystickView(Context context, AttributeSet attrs, int defStyleAttr) {
 		super(context, attrs, defStyleAttr);
-		
-		this.init(context);
+		this.init();
 	}
 	
-	public void init(Context context) {		
-		this.context = context;
+	public void init() {
 		this.frameRadius = -1;
 		this.joystickCenterRadius = -1;
 	}
@@ -61,7 +55,7 @@ public class JoystickView extends FrameLayout {
 		params.height = (int) (params.height*y);
 	}
 		
-	public void UpdateLeftView() {	
+	public void updateLeftView() {
 		this.joystickVectorX = 0;
 		this.joystickVectorY = 0;
 		
@@ -81,7 +75,7 @@ public class JoystickView extends FrameLayout {
 		this.joystickCenter.setLayoutParams(params);
 	}
 
-	public void UpdateRightView() {
+	public void updateRightView() {
 		this.joystickVectorX = 0;
 		this.joystickVectorY = 0;
 
@@ -122,29 +116,29 @@ public class JoystickView extends FrameLayout {
 		return this.joystickVectorY;
 	}
 
-	public boolean IsTouchToTrack() {
+	public boolean isTouchToTrack() {
 		return this.touchToTrack != null;
 	}
 
-	public boolean IsTouchToTrack(MotionEvent evt) {
+	public boolean isTouchToTrack(MotionEvent evt) {
 		return this.touchToTrack == evt;
 	}
 
-	public boolean IsTouchToTrack(MotionEvent evt, int id) {
+	public boolean isTouchToTrack(MotionEvent evt, int id) {
 		return this.touchToTrack == evt && this.id == id;
 	}
 
-	public void SetTouchToTrack(MotionEvent touchToTrack, int anID) {
+	public void setTouchToTrack(MotionEvent touchToTrack, int anID) {
 		this.touchToTrack = touchToTrack;
 		this.id = anID;
 	}
 
-	public void SetCenter(Point pt) {
+	public void setCenter(Point pt) {
 		if (this.frameRadius == -1)
-			this.frameRadius = this.getWidth()/2;
+			this.frameRadius = this.getWidth()/2f;
 
 		if (this.joystickCenterRadius == -1)
-			this.joystickCenterRadius = this.joystickCenter.getWidth()/2;
+			this.joystickCenterRadius = this.joystickCenter.getWidth()/2f;
 
 		RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) this.getLayoutParams();
 		params.setMargins(pt.x-(int)this.frameRadius, pt.y-(int)this.frameRadius, 0, 0);

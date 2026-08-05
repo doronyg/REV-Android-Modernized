@@ -1,13 +1,10 @@
 package com.wowwee.revandroidsampleproject.ai;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
+import android.content.Context;
 
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot;
 
-import android.content.Context;
+import java.util.HashMap;
 
 
 public class AIPlayerManager {

@@ -1,16 +1,5 @@
 package com.wowwee.revandroidsampleproject.utils;
 
-import java.util.List;
-
-import com.wowwee.revandroidsampleproject.R;
-import com.wowwee.revandroidsampleproject.ai.AIPlayer;
-import com.wowwee.revandroidsampleproject.ai.AIPlayerManager;
-import com.wowwee.revandroidsampleproject.fragments.FragmentHelper;
-import com.wowwee.revandroidsampleproject.fragments.RevAIPlayerFragment;
-import com.wowwee.revandroidsampleproject.fragments.RevConnectAIFragment;
-import com.wowwee.revandroidsampleproject.fragments.RevConnectAIFragment.ConnectAIMode;
-import com.wowwee.revandroidsampleproject.fragments.RevConnectAIFragment.SelectAICar;
-
 import android.content.Context;
 import android.graphics.Color;
 import android.support.v4.app.FragmentActivity;
@@ -19,16 +8,25 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
 import android.widget.AdapterView.OnItemClickListener;
-import android.widget.ImageView;
+import android.widget.ArrayAdapter;
 import android.widget.TextView;
+
+import com.wowwee.revandroidsampleproject.R;
+import com.wowwee.revandroidsampleproject.ai.AIPlayerManager;
+import com.wowwee.revandroidsampleproject.fragments.FragmentHelper;
+import com.wowwee.revandroidsampleproject.fragments.RevAIPlayerFragment;
+import com.wowwee.revandroidsampleproject.fragments.RevConnectAIFragment;
+import com.wowwee.revandroidsampleproject.fragments.RevConnectAIFragment.ConnectAIMode;
+import com.wowwee.revandroidsampleproject.fragments.RevConnectAIFragment.SelectAICar;
+
+import java.util.List;
 
 public class AICarListAdapter extends ArrayAdapter<SelectAICar> implements OnItemClickListener{
 
-	private Context context;
+	private final Context context;
 	private List<SelectAICar> carList;
-	private RevConnectAIFragment fragment;
+	private final RevConnectAIFragment fragment;
 	private RevAIPlayerFragment aiFragment;
 	public ConnectAIMode connectAIMode;
 	private ViewHolder holder;

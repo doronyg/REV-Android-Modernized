@@ -33,24 +33,24 @@ import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotConstant;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotConstant.revRobotTrackingMode;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotFinder;
-
-import java.util.List;
-import java.util.Timer;
-
+import com.wowwee.revandroidsampleproject.R;
 import com.wowwee.revandroidsampleproject.ai.AIPlayer;
 import com.wowwee.revandroidsampleproject.ai.AIPlayerManager;
 import com.wowwee.revandroidsampleproject.data.JoystickData;
 import com.wowwee.revandroidsampleproject.data.JoystickData.TYPE;
 import com.wowwee.revandroidsampleproject.drawer.JoystickDrawer;
+import com.wowwee.revandroidsampleproject.fragments.RevAIPlayerFragment.RevAIPlayerFragmentListener;
+import com.wowwee.revandroidsampleproject.fragments.RevConnectAIFragment.REVConnectAIFragmentListener;
+import com.wowwee.revandroidsampleproject.fragments.RevConnectAIFragment.RevConnectAICallback;
+import com.wowwee.revandroidsampleproject.fragments.RevConnectAIFragment.SelectAICar;
+import com.wowwee.revandroidsampleproject.utils.BroadcastReceiverUtils;
 import com.wowwee.revandroidsampleproject.utils.JoystickView;
-import com.wowwee.revandroidsampleproject.R;
 import com.wowwee.revandroidsampleproject.utils.Player;
 import com.wowwee.revandroidsampleproject.utils.REVPlayer;
 import com.wowwee.revandroidsampleproject.weapon.WeaponManager;
-import com.wowwee.revandroidsampleproject.fragments.RevConnectAIFragment.SelectAICar;
-import com.wowwee.revandroidsampleproject.fragments.RevAIPlayerFragment.RevAIPlayerFragmentListener;
-import com.wowwee.revandroidsampleproject.fragments.RevConnectAIFragment.RevConnectAICallback;
-import com.wowwee.revandroidsampleproject.fragments.RevConnectAIFragment.REVConnectAIFragmentListener;
+
+import java.util.List;
+import java.util.Timer;
 
 @SuppressLint("ValidFragment")
 public class DriveViewFragment extends BaseViewFragment implements OnTouchListener, REVConnectAIFragmentListener, RevConnectAICallback, RevAIPlayerFragmentListener {
@@ -112,9 +112,12 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 	private final int DELAY_HALF_SECOND = 500;
 	private final int DELAY_ONE_SECOND = 1000;
 
-	public DriveViewFragment() {
-		super(R.layout.fragment_drive);
+	@Override
+	protected int layoutId() {
+		return R.layout.fragment_drive;
+	}
 
+	public DriveViewFragment() {
 		leftJoystickDrawableId = R.drawable.drive_core_ring;
 		rightJoystickDrawableId = R.drawable.drive_core_ring;
 		outerRingDrawableId = R.drawable.drive_outer_gear_ring;
@@ -137,15 +140,7 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 		super.onDestroyView();
 		Log.d(TAG, "onDestroyView(): isJoystickTimerRunning=" + isJoystickTimerRunning);
 
-		// Unregister broadcast
-		if (isReviveReceiverRegistered && getActivity() != null) {
-			try {
-				getActivity().unregisterReceiver(mBroadcast);
-			} catch (IllegalArgumentException ex) {
-				Log.w(TAG, "Receiver already unregistered.", ex);
-			}
-			isReviveReceiverRegistered = false;
-		}
+		unregisterReviveReceiver();
 
 		if(leftJoystickDrawer != null) {
 			leftJoystickDrawer.destroy();
@@ -225,17 +220,7 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 			return null;
 		Log.d(TAG, "onCreateView()");
 
-		// Register broadcast with Android 13+ explicit export behavior.
-		if (getActivity() != null && !isReviveReceiverRegistered) {
-			IntentFilter reviveFilter = new IntentFilter(BROADCAST_REVIVE);
-			if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-				getActivity().registerReceiver(mBroadcast, reviveFilter, Context.RECEIVER_NOT_EXPORTED);
-			} else {
-				getActivity().registerReceiver(mBroadcast, reviveFilter);
-			}
-			isReviveReceiverRegistered = true;
-			Log.d(TAG, "Revive receiver registered. action=" + BROADCAST_REVIVE);
-		}
+		registerReviveReceiver();
 
 		// Init weapon manager
 		WeaponManager.getInstance().Load(getFragmentActivity());
@@ -297,10 +282,10 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 
 		// Define joystick view
 		this.joystickLeft = (JoystickView)view.findViewById(R.id.layoutleftJoystick);
-		this.joystickLeft.UpdateLeftView();
+		this.joystickLeft.updateLeftView();
 		this.joystickLeft.setVisibility(View.INVISIBLE);
 		this.joystickRight = (JoystickView)view.findViewById(R.id.layoutrightJoystick);
-		this.joystickRight.UpdateRightView();
+		this.joystickRight.updateRightView();
 		this.joystickRight.setVisibility(View.INVISIBLE);
 
 		// Define health text
@@ -558,6 +543,30 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 		}
 	}
 
+	private void registerReviveReceiver() {
+		IntentFilter reviveFilter = new IntentFilter(BROADCAST_REVIVE);
+		boolean wasRegistered = isReviveReceiverRegistered;
+		isReviveReceiverRegistered = BroadcastReceiverUtils.registerReceiver(
+				getActivity(),
+				mBroadcast,
+				reviveFilter,
+				isReviveReceiverRegistered,
+				false
+		);
+		if (!wasRegistered && isReviveReceiverRegistered) {
+			Log.d(TAG, "Revive receiver registered. action=" + BROADCAST_REVIVE);
+		}
+	}
+
+	private void unregisterReviveReceiver() {
+		isReviveReceiverRegistered = BroadcastReceiverUtils.unregisterReceiver(
+				getActivity(),
+				mBroadcast,
+				isReviveReceiverRegistered,
+				TAG
+		);
+	}
+
 	//================================================================================
 	// OnTouch listener
 	//================================================================================
@@ -594,17 +603,17 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 					Point size = new Point();
 					display.getSize(size);
 					if (pt.x < size.x/2) {
-						if (!this.joystickLeft.IsTouchToTrack()) {
+						if (!this.joystickLeft.isTouchToTrack()) {
 							this.joystickLeft.setVisibility(View.VISIBLE);
-							this.joystickLeft.SetCenter(pt);
-							this.joystickLeft.SetTouchToTrack(event, event.getPointerId(event.getActionIndex()));
+							this.joystickLeft.setCenter(pt);
+							this.joystickLeft.setTouchToTrack(event, event.getPointerId(event.getActionIndex()));
 						}
 					}
 					else {
-						if (!this.joystickRight.IsTouchToTrack()) {
+						if (!this.joystickRight.isTouchToTrack()) {
 							this.joystickRight.setVisibility(View.VISIBLE);
-							this.joystickRight.SetCenter(pt);
-							this.joystickRight.SetTouchToTrack(event, event.getPointerId(event.getActionIndex()));
+							this.joystickRight.setCenter(pt);
+							this.joystickRight.setTouchToTrack(event, event.getPointerId(event.getActionIndex()));
 						}
 					}
 				}
@@ -612,12 +621,12 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 				case MotionEvent.ACTION_MOVE: {
 					// Update the drag points
 					for (int i=0; i<event.getPointerCount(); i++) {
-						if (this.joystickLeft.IsTouchToTrack(event, event.getPointerId(i))) {
+						if (this.joystickLeft.isTouchToTrack(event, event.getPointerId(i))) {
 							this.joystickLeft.touchesMoved(event, i);
 							movementVector[1] = this.joystickLeft.getJoystickVectorY();
 							moveMip = true;
 						}
-						if (this.joystickRight.IsTouchToTrack(event, event.getPointerId(i))) {
+						if (this.joystickRight.isTouchToTrack(event, event.getPointerId(i))) {
 							this.joystickRight.touchesMoved(event, i);
 							movementVector[0] = this.joystickRight.getJoystickVectorX();
 							moveMip = true;
@@ -629,12 +638,12 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 				case MotionEvent.ACTION_POINTER_UP:
 				case MotionEvent.ACTION_CANCEL: {
 					// Hide joystick
-					if (this.joystickLeft.IsTouchToTrack(event, event.getPointerId(event.getActionIndex()))){
+					if (this.joystickLeft.isTouchToTrack(event, event.getPointerId(event.getActionIndex()))){
 						this.joystickLeft.setVisibility(View.INVISIBLE);
 						this.joystickLeft.touchesEnded(event);
 						movementVector[1] = 0;
 					}
-					if (this.joystickRight.IsTouchToTrack(event, event.getPointerId(event.getActionIndex()))){
+					if (this.joystickRight.isTouchToTrack(event, event.getPointerId(event.getActionIndex()))){
 						this.joystickRight.setVisibility(View.INVISIBLE);
 						this.joystickRight.touchesEnded(event);
 						movementVector[0] = 0;

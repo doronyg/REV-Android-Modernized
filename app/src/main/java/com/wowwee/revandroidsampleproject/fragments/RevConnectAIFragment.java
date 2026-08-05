@@ -1,36 +1,20 @@
 package com.wowwee.revandroidsampleproject.fragments;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map.Entry;
-
 import android.app.ProgressDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
-import android.util.Log;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.animation.Animation;
-import android.view.animation.AnimationSet;
-import android.view.animation.AnimationUtils;
-import android.view.animation.Animation.AnimationListener;
 import android.widget.Button;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.ListView;
-import android.widget.RelativeLayout;
-import android.widget.TextView;
 
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot;
-import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotConstant;
-import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot.REVType;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotFinder;
 import com.wowwee.revandroidsampleproject.R;
 import com.wowwee.revandroidsampleproject.ai.AIPlayer;
@@ -38,7 +22,13 @@ import com.wowwee.revandroidsampleproject.ai.AIPlayerManager;
 import com.wowwee.revandroidsampleproject.fragments.RevAIPlayerFragment.RevAIPlayerFragmentListener;
 import com.wowwee.revandroidsampleproject.fragments.RevAIPlayerFragment.SelectedCarListener;
 import com.wowwee.revandroidsampleproject.utils.AICarListAdapter;
+import com.wowwee.revandroidsampleproject.utils.BroadcastReceiverUtils;
 import com.wowwee.revandroidsampleproject.utils.REVPlayer;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map.Entry;
 
 public class RevConnectAIFragment extends BaseViewFragment implements RevAIPlayerFragmentListener, SelectedCarListener{
 
@@ -59,10 +49,16 @@ public class RevConnectAIFragment extends BaseViewFragment implements RevAIPlaye
 	private Handler connectAIHandler;
 	private Runnable connectAIRunnable;
 	private int retryTime;
+	private boolean isRevFinderReceiverRegistered = false;
 
 	public enum ConnectAIMode {BATTLE_MODE, CAMPAIGN_MODE};
 	public ConnectAIMode connectAIMode = ConnectAIMode.BATTLE_MODE;
-	
+
+	@Override
+	protected int layoutId() {
+		return R.layout.fragment_connect_ai;
+	}
+
 	//================================================================================
     // Interface
     //================================================================================
@@ -74,12 +70,10 @@ public class RevConnectAIFragment extends BaseViewFragment implements RevAIPlaye
     // Constructor
     //================================================================================
 	public RevConnectAIFragment() {
-		super(R.layout.fragment_connect_ai);
 		this.connectAIMode = ConnectAIMode.BATTLE_MODE;
 	}
 	
 	public RevConnectAIFragment(ConnectAIMode connectAIMode) {
-		super(R.layout.fragment_connect_ai);
 		this.connectAIMode = connectAIMode;
 	}
 	
@@ -342,9 +336,14 @@ public class RevConnectAIFragment extends BaseViewFragment implements RevAIPlaye
 	@Override
 	public void onResume() {
 		super.onResume();
-		
-		getFragmentActivity().registerReceiver(mRevFinderBroadcastReceiver, REVRobotFinder.getRevRobotFinderIntentFilter());
-		
+		isRevFinderReceiverRegistered = BroadcastReceiverUtils.registerReceiver(
+				getFragmentActivity(),
+				mRevFinderBroadcastReceiver,
+				REVRobotFinder.getRevRobotFinderIntentFilter(),
+				isRevFinderReceiverRegistered,
+				false
+		);
+
 		// Start scan for ai cars
 		REVRobotFinder.getInstance().stopScanForREV();
 		REVRobotFinder.getInstance().stopScanForREVContinuous();
@@ -376,11 +375,16 @@ public class RevConnectAIFragment extends BaseViewFragment implements RevAIPlaye
 		// Stop scan for ai cars
 		REVRobotFinder.getInstance().stopScanForREV();
 		REVRobotFinder.getInstance().stopScanForREVContinuous();
-		
-		getFragmentActivity().unregisterReceiver(mRevFinderBroadcastReceiver);
+
+		isRevFinderReceiverRegistered = BroadcastReceiverUtils.unregisterReceiver(
+				getFragmentActivity(),
+				mRevFinderBroadcastReceiver,
+				isRevFinderReceiverRegistered,
+				getClass().getSimpleName()
+		);
 	}
 	
-	public class SelectAICar{
+	public static class SelectAICar{
 
 		REVRobot revRobot;
 		boolean selected;

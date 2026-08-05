@@ -1,5 +1,7 @@
 package com.wowwee.revandroidsampleproject.fragments;
 
+import static android.os.Looper.getMainLooper;
+
 import android.Manifest;
 import android.app.AlertDialog;
 import android.bluetooth.BluetoothAdapter;
@@ -26,6 +28,7 @@ import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotFinder;
 import com.wowwee.bluetoothrobotcontrollib.util.AdRecord;
 import com.wowwee.revandroidsampleproject.MainActivity;
 import com.wowwee.revandroidsampleproject.R;
+import com.wowwee.revandroidsampleproject.utils.BroadcastReceiverUtils;
 import com.wowwee.revandroidsampleproject.utils.REVPlayer;
 
 import java.util.ArrayList;
@@ -54,12 +57,21 @@ public class ScanFragment extends BaseViewFragment {
     private REVRobot closestRev = null;
     private int scanStatusTick = 0;
     private static final long PAIRED_FALLBACK_DELAY_MS = 2500L;
+    private static final long SCAN_STARTUP_INITIAL_DELAY_MS = 500L;
+    private static final long SCAN_STARTUP_FINAL_DELAY_MS = 1000L;
     private final ArrayList<BluetoothDevice> pairedRevCandidates = new ArrayList<BluetoothDevice>();
     private long pairedCandidatesUpdatedAtMs = 0L;
     private boolean pairedFallbackAttempted = false;
+    private final Runnable scanStartupStepOneRunnable = this::runScanStartupStepOne;
+    private final Runnable scanStartupStepTwoRunnable = this::runScanStartupStepTwo;
+    private boolean isRevFinderReceiverRegistered = false;
 
     public ScanFragment() {
-        super(R.layout.fragment_scan);
+    }
+
+    @Override
+    protected int layoutId() {
+        return R.layout.fragment_scan;
     }
 
     //================================================================================
@@ -72,55 +84,117 @@ public class ScanFragment extends BaseViewFragment {
             return null;
 
         View view = super.onCreateView(inflater, container, savedInstanceState);
-        handler = new Handler();
+        handler = new Handler(getMainLooper());
 
         return view;
     }
 
     @Override
     public void onResume() {
-        super.onResume();
         Log.d(TAG, "onResume() start.");
-        pairedRevCandidates.clear();
-        pairedCandidatesUpdatedAtMs = 0L;
-        pairedFallbackAttempted = false;
+        super.onResume();
+        if (handler == null) {
+            handler = new Handler(getMainLooper());
+        }
+        resetResumeState();
 
-        if (!hasRequiredBluetoothPermissions()) {
-            Log.w(TAG, "Required Bluetooth permissions missing on resume; requesting through activity.");
-            if (getFragmentActivity() instanceof com.wowwee.revandroidsampleproject.MainActivity) {
-                ((com.wowwee.revandroidsampleproject.MainActivity) getFragmentActivity()).ensureBluetoothPermissionsAndStart();
-            }
+        if (!ensurePermissionsReady()) {
             return;
         }
-
-        // Init bluetooth only after runtime permissions are granted.
         if (!initBluetooth()) {
             Log.e(TAG, "initBluetooth() failed; scan flow aborted.");
             return;
         }
-
-        getFragmentActivity().registerReceiver(mRevFinderBroadcastReceiver, REVRobotFinder.getRevRobotFinderIntentFilter());
-        Log.d(TAG, "Registered REV finder broadcast receiver.");
-
-        // If already connected after lifecycle resume, skip scanning and proceed.
-        REVRobot connectedRev = REVRobotFinder.getInstance().firstConnectedREV();
-        if (connectedRev != null) {
-            Log.d(TAG, "onResume(): REV already connected, opening DriveView directly.");
-            REVPlayer.getInstance().setPlayerRev(connectedRev);
-            setConnectionState(CONNECTION_CONNECTED);
+        registerFinderReceiver();
+        if (tryResumeWithConnectedRev()) {
+            return;
+        }
+        if (!ensureBluetoothAdapterAvailableAndEnabled()) {
             return;
         }
 
-        BluetoothManager btManager = (BluetoothManager)getFragmentActivity().getSystemService(Context.BLUETOOTH_SERVICE);
+        startScanStartupSequence();
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        cancelScanStartupSequence();
+        scanLeDevice(false);
+        pairedFallbackAttempted = false;
+        unregisterFinderReceiver();
+        if (tapTimer != null) {
+            tapTimer.cancel();
+            tapTimer = null;
+        }
+    }
+
+    private void resetResumeState() {
+        pairedRevCandidates.clear();
+        pairedCandidatesUpdatedAtMs = 0L;
+        pairedFallbackAttempted = false;
+    }
+
+    private boolean ensurePermissionsReady() {
+        if (hasRequiredBluetoothPermissions()) {
+            return true;
+        }
+
+        Log.w(TAG, "Required Bluetooth permissions missing on resume; requesting through activity.");
+        if (getFragmentActivity() instanceof MainActivity) {
+            ((MainActivity) getFragmentActivity()).ensureBluetoothPermissionsAndStart();
+        }
+        return false;
+    }
+
+    private void registerFinderReceiver() {
+        boolean wasRegistered = isRevFinderReceiverRegistered;
+        isRevFinderReceiverRegistered = BroadcastReceiverUtils.registerReceiver(
+                getFragmentActivity(),
+                mRevFinderBroadcastReceiver,
+                REVRobotFinder.getRevRobotFinderIntentFilter(),
+                isRevFinderReceiverRegistered,
+                false
+        );
+        if (!wasRegistered && isRevFinderReceiverRegistered) {
+            Log.d(TAG, "Registered REV finder broadcast receiver.");
+        }
+    }
+
+    private void unregisterFinderReceiver() {
+        BroadcastReceiverUtils.unregisterReceiver(
+                getFragmentActivity(),
+                mRevFinderBroadcastReceiver,
+                isRevFinderReceiverRegistered,
+                TAG
+        );
+        isRevFinderReceiverRegistered = false;
+    }
+
+    private boolean tryResumeWithConnectedRev() {
+        REVRobot connectedRev = REVRobotFinder.getInstance().firstConnectedREV();
+        if (connectedRev == null) {
+            return false;
+        }
+
+        Log.d(TAG, "onResume(): REV already connected, opening DriveView directly.");
+        REVPlayer.getInstance().setPlayerRev(connectedRev);
+        setConnectionState(CONNECTION_CONNECTED);
+        return true;
+    }
+
+    private boolean ensureBluetoothAdapterAvailableAndEnabled() {
+        BluetoothManager btManager = (BluetoothManager) getFragmentActivity().getSystemService(Context.BLUETOOTH_SERVICE);
         BluetoothAdapter btAdapter = btManager != null ? btManager.getAdapter() : null;
         Log.d(TAG, "BluetoothManager instance=" + (btManager == null ? "null" : "non-null") + ", adapter=" + (btAdapter == null ? "null" : "non-null"));
 
         if (btAdapter == null) {
             Log.e(TAG, "Bluetooth adapter is null in onResume. Device may not support Bluetooth LE, adapter service may be unavailable, or permission gate still failing.");
-            return;
+            return false;
         }
 
-        if (!btAdapter.isEnabled()) {
+        boolean enabled = btAdapter.isEnabled();
+        if (!enabled) {
             Log.d(TAG, "Bluetooth adapter present but disabled; requesting user to enable.");
             try {
                 Intent enableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
@@ -133,53 +207,55 @@ public class ScanFragment extends BaseViewFragment {
                 askBluetoothActivationManually();
             }
         }
+        return enabled;
+    }
 
-        try {
-            Thread.sleep(500);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+    private void startScanStartupSequence() {
+        cancelScanStartupSequence();
+        handler.postDelayed(scanStartupStepOneRunnable, SCAN_STARTUP_INITIAL_DELAY_MS);
+    }
+
+    private void runScanStartupStepOne() {
+        if (!isAdded() || getFragmentActivity() == null) {
+            return;
         }
+
         REVRobotFinder.getInstance().clearFoundREVList();
-
         scanLeDevice(false);
-        try {
-            Thread.sleep(500);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+        handler.postDelayed(scanStartupStepTwoRunnable, SCAN_STARTUP_FINAL_DELAY_MS);
+    }
+
+    private void runScanStartupStepTwo() {
+        if (!isAdded() || getFragmentActivity() == null) {
+            return;
         }
 
-        try {
-            Thread.sleep(500);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
         scanLeDevice(true);
+        startTapTimer();
+        setConnectionState(CONNECTION_SCANNING);
+    }
 
-        // Start timer
+    private void startTapTimer() {
+        if (tapTimer != null) {
+            tapTimer.cancel();
+        }
+
         tapTimer = new Timer();
-        int delay = 0;
-        int period = 500;
-        tapTimer.scheduleAtFixedRate(new TimerTask() {
+        tapTimer.schedule(new TimerTask() {
             @Override
             public void run() {
                 tapTimerAction();
             }
-        }, delay, period);
-
-        // Connection state
-        setConnectionState(CONNECTION_SCANNING);
+        }, 0, 500);
     }
 
-    @Override
-    public void onPause() {
-        super.onPause();
-        scanLeDevice(false);
-        pairedFallbackAttempted = false;
-        if (tapTimer != null) {
-            tapTimer.cancel();
-            tapTimer = null;
+    private void cancelScanStartupSequence() {
+        if (handler == null) {
+            return;
         }
-//        unregisterReceiver(mRevFinderBroadcastReceiver);
+
+        handler.removeCallbacks(scanStartupStepOneRunnable);
+        handler.removeCallbacks(scanStartupStepTwoRunnable);
     }
 
     private boolean hasRequiredBluetoothPermissions() {
@@ -246,11 +322,7 @@ public class ScanFragment extends BaseViewFragment {
                     }}
         );
 
-        builder.setNegativeButton(android.R.string.no, new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                    }}
-        );
+        builder.setNegativeButton(android.R.string.no, (dialog, which) -> {});
 
         builder.show();
     }

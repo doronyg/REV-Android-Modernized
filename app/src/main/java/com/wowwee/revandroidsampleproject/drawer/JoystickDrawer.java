@@ -4,7 +4,6 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.Rect;
-import android.util.Log;
 
 import com.wowwee.revandroidsampleproject.data.JoystickData;
 

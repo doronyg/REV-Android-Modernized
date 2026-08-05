@@ -4,43 +4,40 @@ import android.graphics.Rect;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentActivity;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
 import com.wowwee.bluetoothrobotcontrollib.RobotCommand;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot;
+import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot.REVRobotInterface;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotFinder;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVTrackingStatus;
-import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot.REVRobotInterface;
 
 import java.util.ArrayList;
 
-public class BaseViewFragment extends Fragment implements REVRobotInterface {
-	private int layoutId;
-	
+public abstract class BaseViewFragment extends Fragment implements REVRobotInterface {
 	protected Rect viewRect;
 
 	public REVRobot rev;
 	
 	public static FragmentActivity activity;
 	
-	public BaseViewFragment(int layoutId) {
-		this.layoutId = layoutId;
+	public BaseViewFragment() {
 		rev = REVRobotFinder.getInstance().firstConnectedREV();
 		if(rev != null) {
 			rev.setCallbackInterface(this);
 		}
 	}
 
+	abstract protected int layoutId();
+
 	public static FragmentActivity getFragmentActivity(){
 		return activity;
 	}
 	
 	@Override
-	public View onCreateView(LayoutInflater inflater, ViewGroup container,
-			Bundle savedInstanceState) {
+	public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 		if (container == null)
 			return null;
 		
@@ -51,6 +48,7 @@ public class BaseViewFragment extends Fragment implements REVRobotInterface {
 		activity.getWindowManager().getDefaultDisplay().getRectSize(viewRect);
 		
 		View view;
+		int layoutId = layoutId();
 		if (layoutId == -1) {
 			view = super.onCreateView(inflater, container, savedInstanceState);
 		} else {
