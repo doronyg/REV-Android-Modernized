@@ -797,13 +797,10 @@ extends BluetoothRobotFinder {
             return scanGranted && connectGranted;
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            boolean coarseGranted = this.mContext.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
-            boolean fineGranted = this.mContext.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
-            return coarseGranted || fineGranted;
-        }
+        boolean coarseGranted = this.mContext.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        boolean fineGranted = this.mContext.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        return coarseGranted || fineGranted;
 
-        return true;
     }
 
     private void logPermissionSnapshot() {
@@ -816,7 +813,7 @@ extends BluetoothRobotFinder {
             boolean scanGranted = this.mContext.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED;
             boolean connectGranted = this.mContext.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED;
             Log.d(TAG, "Permissions S+: BLUETOOTH_SCAN=" + scanGranted + ", BLUETOOTH_CONNECT=" + connectGranted);
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        } else {
             boolean coarseGranted = this.mContext.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
             boolean fineGranted = this.mContext.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
             Log.d(TAG, "Permissions pre-S: ACCESS_COARSE_LOCATION=" + coarseGranted + ", ACCESS_FINE_LOCATION=" + fineGranted);

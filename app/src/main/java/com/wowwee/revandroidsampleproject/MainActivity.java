@@ -64,12 +64,9 @@ public class MainActivity extends FragmentActivity {
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
 			return new String[]{Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT};
 		}
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-			// BLE scan on Android 6-11 requires a location runtime permission.
-			return new String[]{Manifest.permission.ACCESS_COARSE_LOCATION};
-		}
-		return new String[0];
-	}
+        // BLE scan on Android 6-11 requires a location runtime permission.
+        return new String[]{Manifest.permission.ACCESS_COARSE_LOCATION};
+    }
 
 	private void startBluetoothFlow() {
 		if (didStartBluetoothFlow) {

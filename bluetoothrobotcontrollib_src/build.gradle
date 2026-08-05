@@ -2,10 +2,10 @@ apply plugin: 'com.android.library'
 
 android {
     namespace "com.wowwee.bluetoothrobotcontrollib"
-    compileSdk 34
+    compileSdk 36
 
     defaultConfig {
-        minSdk 23
+        minSdk 29
     }
 
     buildFeatures {
@@ -23,6 +23,6 @@ android {
 }
 
 dependencies {
-    implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'com.google.code.gson:gson:2.14.0'
 }
 

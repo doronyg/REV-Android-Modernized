@@ -198,13 +198,10 @@ public class ScanFragment extends BaseViewFragment {
                     && connectPermission == PackageManager.PERMISSION_GRANTED;
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            int coarseLocation = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION);
-            Log.d(TAG, "Permission check pre-S: ACCESS_COARSE_LOCATION=" + (coarseLocation == PackageManager.PERMISSION_GRANTED ? "GRANTED" : "DENIED"));
-            return coarseLocation == PackageManager.PERMISSION_GRANTED;
-        }
+        int coarseLocation = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION);
+        Log.d(TAG, "Permission check pre-S: ACCESS_COARSE_LOCATION=" + (coarseLocation == PackageManager.PERMISSION_GRANTED ? "GRANTED" : "DENIED"));
+        return coarseLocation == PackageManager.PERMISSION_GRANTED;
 
-        return true;
     }
 
     private boolean hasBluetoothConnectPermission() {
