@@ -23,6 +23,12 @@
     <string name="permissions_enable_bluetooth_button">Enable Bluetooth</string>
     <string name="scan_status_preparing">Preparing Bluetooth...</string>
     <string name="scan_retry">Retry</string>
+    <string name="scan_open_discovery">Open Discovery</string>
+    <string name="discovery_title">BLE Discovery (All Devices)</string>
+    <string name="discovery_status_starting">Starting discovery scan...</string>
+    <string name="discovery_empty">No devices discovered yet.</string>
+    <string name="discovery_rescan">Rescan</string>
+    <string name="discovery_back_to_scan">Back to Scan</string>
 
     <string-array name="gun_array">
         <item>Gun A</item>

@@ -17,10 +17,8 @@ import android.support.v4.content.ContextCompat;
 import android.util.AndroidRuntimeException;
 import android.util.Log;
 
-import com.wowwee.bluetoothrobotcontrollib.RobotCommand;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotFinder;
-import com.wowwee.bluetoothrobotcontrollib.rev.REVTrackingStatus;
 import com.wowwee.bluetoothrobotcontrollib.util.AdRecord;
 
 import java.util.ArrayList;
@@ -35,6 +33,7 @@ public class RevScanStateMachine {
         void onPermissionsRequired();
         void onBluetoothEnableRequired();
         void onScanStatusChanged(String status, boolean showRetry);
+        void onDiscoveryRecommended();
         void onNavigateToDriverMode(REVRobot connectedRev);
     }
 
@@ -49,6 +48,8 @@ public class RevScanStateMachine {
     private static final long PAIRED_FALLBACK_DELAY_MS = 2500L;
     private static final long SCAN_STARTUP_INITIAL_DELAY_MS = 500L;
     private static final long SCAN_STARTUP_FINAL_DELAY_MS = 1000L;
+    private static final long DISCOVERY_RECOMMEND_MS = 10000L;
+    private static final long SCAN_TIMEOUT_MS = 30000L;
 
     private static RevScanStateMachine instance;
 
@@ -68,9 +69,38 @@ public class RevScanStateMachine {
     private long pairedCandidatesUpdatedAtMs;
     private boolean pairedFallbackAttempted;
     private boolean isRevFinderReceiverRegistered;
+    private boolean hasSeenCandidateInSession;
 
     private final Runnable scanStartupStepOneRunnable = this::runScanStartupStepOne;
     private final Runnable scanStartupStepTwoRunnable = this::runScanStartupStepTwo;
+    private final Runnable discoveryRecommendRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (connectionState != CONNECTION_SCANNING || hasSeenCandidateInSession) {
+                return;
+            }
+
+            notifyStatus("No device yet. You can open discovery mode.", false);
+             Listener scanListener = getListener();
+             if (scanListener != null) {
+                 scanListener.onDiscoveryRecommended();
+             }
+         }
+    };
+
+    private final Runnable scanTimeoutRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (connectionState == CONNECTION_CONNECTED) {
+                return;
+            }
+
+            notifyStatus("No REV found. Tap retry or open discovery.", true);
+            cancelTapTimer();
+            scanLeDevice(false);
+            connectionState = CONNECTION_IDLE;
+        }
+    };
 
     private final BroadcastReceiver revFinderBroadcastReceiver = new BroadcastReceiver() {
         @Override
@@ -147,14 +177,12 @@ public class RevScanStateMachine {
 
     public void stop() {
         notifyStatus("Paused", true);
+        cancelScanSessionTimers();
         cancelScanStartupSequence();
+        cancelTapTimer();
         scanLeDevice(false);
         pairedFallbackAttempted = false;
         unregisterFinderReceiver();
-        if (tapTimer != null) {
-            tapTimer.cancel();
-            tapTimer = null;
-        }
     }
 
     public void onRobotReady(REVRobot rev) {
@@ -184,6 +212,7 @@ public class RevScanStateMachine {
         pairedRevCandidates.clear();
         pairedCandidatesUpdatedAtMs = 0L;
         pairedFallbackAttempted = false;
+        hasSeenCandidateInSession = false;
     }
 
     private boolean hasRequiredBluetoothPermissions() {
@@ -290,6 +319,11 @@ public class RevScanStateMachine {
         handler.postDelayed(scanStartupStepOneRunnable, SCAN_STARTUP_INITIAL_DELAY_MS);
     }
 
+    private void cancelScanStartupSequence() {
+        handler.removeCallbacks(scanStartupStepOneRunnable);
+        handler.removeCallbacks(scanStartupStepTwoRunnable);
+    }
+
     private void runScanStartupStepOne() {
         if (getHostActivity() == null) {
             return;
@@ -308,13 +342,12 @@ public class RevScanStateMachine {
         notifyStatus("Scanning for REV...", false);
         scanLeDevice(true);
         startTapTimer();
+        startScanSessionTimers();
         setConnectionState(CONNECTION_SCANNING);
     }
 
     private void startTapTimer() {
-        if (tapTimer != null) {
-            tapTimer.cancel();
-        }
+        cancelTapTimer();
 
         tapTimer = new Timer();
         tapTimer.schedule(new TimerTask() {
@@ -325,9 +358,22 @@ public class RevScanStateMachine {
         }, 0, 500);
     }
 
-    private void cancelScanStartupSequence() {
-        handler.removeCallbacks(scanStartupStepOneRunnable);
-        handler.removeCallbacks(scanStartupStepTwoRunnable);
+    private void cancelTapTimer() {
+        if (tapTimer != null) {
+            tapTimer.cancel();
+            tapTimer = null;
+        }
+    }
+
+    private void startScanSessionTimers() {
+        cancelScanSessionTimers();
+        handler.postDelayed(discoveryRecommendRunnable, DISCOVERY_RECOMMEND_MS);
+        handler.postDelayed(scanTimeoutRunnable, SCAN_TIMEOUT_MS);
+    }
+
+    private void cancelScanSessionTimers() {
+        handler.removeCallbacks(discoveryRecommendRunnable);
+        handler.removeCallbacks(scanTimeoutRunnable);
     }
 
     private void scanLeDevice(boolean enable) {
@@ -384,6 +430,8 @@ public class RevScanStateMachine {
                 if (rev.rssi >= closeRSSI) {
                     closestRev = rev;
                     closestTimestamp = System.currentTimeMillis();
+                    hasSeenCandidateInSession = true;
+                    handler.removeCallbacks(discoveryRecommendRunnable);
                     break;
                 }
             }
@@ -428,6 +476,8 @@ public class RevScanStateMachine {
                 notifyStatus("Connecting...", false);
                 break;
             case CONNECTION_CONNECTED: {
+                cancelScanSessionTimers();
+                cancelTapTimer();
                 long connectDeltaTime = System.currentTimeMillis() - connectTimestamp;
                 long delay = 1200 - connectDeltaTime;
                 if (delay < 0) {
@@ -472,6 +522,3 @@ public class RevScanStateMachine {
         });
     }
 }
-
-
-

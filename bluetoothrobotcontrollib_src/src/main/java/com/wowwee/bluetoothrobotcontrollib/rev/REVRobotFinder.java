@@ -68,26 +68,16 @@ extends BluetoothRobotFinder {
     private long leScanEventCount = 0L;
     private boolean isLeScanActive = false;
     private long lastStartScanTimestampMs = 0L;
-    private final Runnable startScanRunnable = new Runnable(){
-
-        @Override
-        public void run() {
-            REVRobotFinder.this.startScan();
+    private final Runnable startScanRunnable = REVRobotFinder.this::startScan;
+    private final Runnable stopScanRunnable = () -> {
+        try {
+            if (REVRobotFinder.this.mBluetoothAdapter != null && REVRobotFinder.this.mLeScanCallback != null) {
+                REVRobotFinder.this.mBluetoothAdapter.stopLeScan(REVRobotFinder.this.mLeScanCallback);
+                REVRobotFinder.this.isLeScanActive = false;
+            }
         }
-    };
-    private final Runnable stopScanRunnable = new Runnable(){
-
-        @Override
-        public void run() {
-            try {
-                if (REVRobotFinder.this.mBluetoothAdapter != null && REVRobotFinder.this.mLeScanCallback != null) {
-                    REVRobotFinder.this.mBluetoothAdapter.stopLeScan(REVRobotFinder.this.mLeScanCallback);
-                    REVRobotFinder.this.isLeScanActive = false;
-                }
-            }
-            catch (NullPointerException e) {
-                e.printStackTrace();
-            }
+        catch (NullPointerException e) {
+            e.printStackTrace();
         }
     };
     private final Runnable startScanRunnableForConnectedBroadcastREV = new Runnable(){
@@ -117,43 +107,40 @@ extends BluetoothRobotFinder {
             }
         }
     };
-    private final BluetoothAdapter.LeScanCallback mLeScanCallback = new BluetoothAdapter.LeScanCallback(){
+    private final BluetoothAdapter.LeScanCallback mLeScanCallback = (device, rssi, scanRecord) -> {
+        REVRobotFinder.this.leScanEventCount++;
+        String name = REVRobotFinder.this.safeDeviceName(device);
+        String address = device != null ? device.getAddress() : "<null-address>";
+        int advLen = scanRecord != null ? scanRecord.length : 0;
+        String type = REVRobotFinder.this.safeDeviceType(device);
+        String bond = REVRobotFinder.this.safeBondState(device);
+        String advPreview = REVRobotFinder.this.bytesToHexPreview(scanRecord, 24);
+        Log.d(TAG, "onLeScan(): #" + REVRobotFinder.this.leScanEventCount + ", name=" + name + ", address=" + address + ", type=" + type + ", bond=" + bond + ", rssi=" + rssi + ", advLen=" + advLen + ", adv=" + advPreview + ", thread=" + Thread.currentThread().getName());
 
-        public void onLeScan(BluetoothDevice device, int rssi, byte[] scanRecord) {
-            ++REVRobotFinder.this.leScanEventCount;
-            String name = REVRobotFinder.this.safeDeviceName(device);
-            String address = device != null ? device.getAddress() : "<null-address>";
-            int advLen = scanRecord != null ? scanRecord.length : 0;
-            String type = REVRobotFinder.this.safeDeviceType(device);
-            String bond = REVRobotFinder.this.safeBondState(device);
-            String advPreview = REVRobotFinder.this.bytesToHexPreview(scanRecord, 24);
-            Log.d(TAG, "onLeScan(): #" + REVRobotFinder.this.leScanEventCount + ", name=" + name + ", address=" + address + ", type=" + type + ", bond=" + bond + ", rssi=" + rssi + ", advLen=" + advLen + ", adv=" + advPreview + ", thread=" + Thread.currentThread().getName());
+        if (device == null) {
+            Log.w(TAG, "onLeScan(): device is null, skipping callback processing");
+            return;
+        }
+        if (scanRecord == null) {
+            Log.w(TAG, "onLeScan(): scanRecord is null for " + address + ", skipping callback processing");
+            return;
+        }
 
-            if (device == null) {
-                Log.w(TAG, "onLeScan(): device is null, skipping callback processing");
-                return;
-            }
-            if (scanRecord == null) {
-                Log.w(TAG, "onLeScan(): scanRecord is null for " + address + ", skipping callback processing");
-                return;
-            }
-
-            try {
-                REVRobotFinder.this.handleFoundBluetoothDevice(device, scanRecord, rssi);
-            }
-            catch (Throwable ex) {
-                Log.e(TAG, "onLeScan(): failed while handling device " + address, ex);
-            }
+        try {
+            REVRobotFinder.this.handleFoundBluetoothDevice(device, scanRecord, rssi);
+        }
+        catch (Throwable ex) {
+            Log.e(TAG, "onLeScan(): failed while handling device " + address, ex);
         }
     };
 
     public REVRobotFinder() {
-        this.mRevFound = new ArrayList<REVRobot>();
-        this.mRevRobotConnected = new ArrayList<REVRobot>();
+        this.mRevFound = new ArrayList<>();
+        this.mRevRobotConnected = new ArrayList<>();
         this.mScanHandler = new Handler(Looper.getMainLooper());
-        this.mRampFound = new ArrayList<REVRobot>();
-        this.mRampConnected = new ArrayList<REVRobot>();
-        this.devicesWithConnectedBroadcast = new ArrayList<REVRobot>();
+        this.mRampFound = new ArrayList<>();
+        this.mRampConnected = new ArrayList<>();
+        this.devicesWithConnectedBroadcast = new ArrayList<>();
         this.rampFoundHandler = new Handler();
         this.revFoundHandler = new Handler();
     }

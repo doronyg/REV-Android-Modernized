@@ -10,6 +10,7 @@ import android.support.v4.app.Fragment
 import android.support.v4.app.FragmentActivity
 import android.support.v4.content.ContextCompat
 import com.wowwee.revandroidsampleproject.R
+import com.wowwee.revandroidsampleproject.fragments.DiscoveryFragment
 import com.wowwee.revandroidsampleproject.fragments.FragmentHelper
 import com.wowwee.revandroidsampleproject.fragments.PermissionsFragment
 import com.wowwee.revandroidsampleproject.fragments.ScanFragment
@@ -19,9 +20,9 @@ object PermissionsFlowHelper {
     @JvmStatic
     fun requiredRuntimePermissions(): Array<String> =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
+            arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION)
         } else {
-            arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION)
+            arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION)
         }
 
     @JvmStatic
@@ -48,6 +49,10 @@ object PermissionsFlowHelper {
     @JvmStatic
     fun openScanFragment(activity: FragmentActivity?) =
         openContentFragment(activity, ScanFragment())
+
+    @JvmStatic
+    fun openDiscoveryFragment(activity: FragmentActivity?) =
+        openContentFragment(activity, DiscoveryFragment())
 
     private fun openContentFragment(activity: FragmentActivity?, fragment: Fragment) {
         activity?.let {
