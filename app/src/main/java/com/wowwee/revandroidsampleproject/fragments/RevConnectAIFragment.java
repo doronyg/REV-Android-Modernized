@@ -376,12 +376,13 @@ public class RevConnectAIFragment extends BaseViewFragment implements RevAIPlaye
 		REVRobotFinder.getInstance().stopScanForREV();
 		REVRobotFinder.getInstance().stopScanForREVContinuous();
 
-		isRevFinderReceiverRegistered = BroadcastReceiverUtils.unregisterReceiver(
+		BroadcastReceiverUtils.unregisterReceiver(
 				getFragmentActivity(),
 				mRevFinderBroadcastReceiver,
 				isRevFinderReceiverRegistered,
 				getClass().getSimpleName()
 		);
+		isRevFinderReceiverRegistered = false;
 	}
 	
 	public static class SelectAICar{

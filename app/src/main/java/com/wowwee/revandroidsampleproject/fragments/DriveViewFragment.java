@@ -559,12 +559,13 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 	}
 
 	private void unregisterReviveReceiver() {
-		isReviveReceiverRegistered = BroadcastReceiverUtils.unregisterReceiver(
+		BroadcastReceiverUtils.unregisterReceiver(
 				getActivity(),
 				mBroadcast,
 				isReviveReceiverRegistered,
 				TAG
 		);
+		isReviveReceiverRegistered = false;
 	}
 
 	//================================================================================

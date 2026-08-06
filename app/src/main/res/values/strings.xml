@@ -14,6 +14,16 @@
     <string name="connect">Connect</string>
     <string name="disconnect">Disconnect</string>
 
+    <string name="permissions_title">REV Setup</string>
+    <string name="permissions_body">This app needs Bluetooth permissions and Bluetooth enabled before scanning for REV devices.</string>
+    <string name="permissions_status_permissions_required">Permissions required</string>
+    <string name="permissions_status_bluetooth_required">Bluetooth is disabled</string>
+    <string name="permissions_status_ready">Setup complete. Opening scanner...</string>
+    <string name="permissions_grant_button">Grant Permissions</string>
+    <string name="permissions_enable_bluetooth_button">Enable Bluetooth</string>
+    <string name="scan_status_preparing">Preparing Bluetooth...</string>
+    <string name="scan_retry">Retry</string>
+
     <string-array name="gun_array">
         <item>Gun A</item>
         <item>Gun B</item>

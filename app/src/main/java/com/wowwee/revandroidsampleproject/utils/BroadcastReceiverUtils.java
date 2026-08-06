@@ -37,22 +37,18 @@ public final class BroadcastReceiverUtils {
         return true;
     }
 
-    public static boolean unregisterReceiver(Context context,
-                                             BroadcastReceiver receiver,
-                                             boolean isRegistered,
-                                             String logTag) {
-        if (!isRegistered || context == null || receiver == null) {
-            return false;
+    public static void unregisterReceiver(Context context,
+                                          BroadcastReceiver receiver,
+                                          boolean isRegistered,
+                                          String logTag) {
+        boolean canUnregister = isRegistered && context != null && receiver != null;
+        if (canUnregister) {
+            try {
+                context.unregisterReceiver(receiver);
+            } catch (IllegalArgumentException ex) {
+                Log.w(logTag, "Broadcast receiver already unregistered.", ex);
+            }
         }
-
-        try {
-            context.unregisterReceiver(receiver);
-            return true;
-        } catch (IllegalArgumentException ex) {
-            Log.w(logTag, "Broadcast receiver already unregistered.", ex);
-        }
-
-        return false;
     }
 }
 

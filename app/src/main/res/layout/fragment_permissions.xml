@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="24dp"
+    android:background="#101216">
+
+    <TextView
+        android:id="@+id/tvPermissionTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/permissions_title"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF" />
+
+    <TextView
+        android:id="@+id/tvPermissionBody"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="@string/permissions_body"
+        android:textSize="16sp"
+        android:textColor="#C9D1D9"
+        android:gravity="center" />
+
+    <TextView
+        android:id="@+id/tvPermissionStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:textColor="#58A6FF"
+        android:textSize="15sp"
+        android:text="@string/permissions_status_permissions_required" />
+
+    <Button
+        android:id="@+id/btnGrantPermissions"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:text="@string/permissions_grant_button" />
+
+    <Button
+        android:id="@+id/btnEnableBluetooth"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="@string/permissions_enable_bluetooth_button"
+        android:visibility="gone" />
+
+</LinearLayout>
+
