@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/path_mode_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?android:colorBackground"
+    android:orientation="horizontal"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:layout_width="124dp"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <Button
+            android:id="@+id/btnPathRun"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:background="?attr/colorAccent"
+            android:text="@string/path_mode_run"
+            android:textAllCaps="false"
+            android:textColor="?android:textColorPrimaryInverse" />
+
+        <Button
+            android:id="@+id/btnPathStop"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:background="?attr/colorButtonNormal"
+            android:enabled="false"
+            android:text="@string/path_mode_stop"
+            android:textAllCaps="false"
+            android:textColor="?android:textColorPrimary" />
+
+        <Button
+            android:id="@+id/btnPathClear"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:background="?attr/colorButtonNormal"
+            android:text="@string/path_mode_clear"
+            android:textAllCaps="false"
+            android:textColor="?android:textColorPrimary" />
+
+        <Button
+            android:id="@+id/btnBackToManual"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="?attr/colorButtonNormal"
+            android:text="@string/path_mode_back_to_manual"
+            android:textAllCaps="false"
+            android:textColor="?android:textColorPrimary" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="12dp"
+        android:layout_weight="1">
+
+        <com.wowwee.revandroidsampleproject.utils.PathDrawingView
+            android:id="@+id/pathDrawingView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="?attr/colorButtonNormal" />
+
+        <TextView
+            android:id="@+id/tvPathDebugOverlay"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end"
+            android:layout_margin="8dp"
+            android:background="?attr/colorButtonNormal"
+            android:padding="8dp"
+            android:text="@string/path_mode_debug_idle"
+            android:textColor="?android:textColorPrimary"
+            android:textSize="12sp" />
+    </FrameLayout>
+
+</LinearLayout>
+
+
+

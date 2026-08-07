@@ -79,8 +79,8 @@ public class JoystickView extends FrameLayout {
 		this.joystickVectorX = 0;
 		this.joystickVectorY = 0;
 
-		this.joystickFrame = (ImageView) this.findViewById(R.id.joystickBaseR);
-		this.joystickCenter = (ImageView) this.findViewById(R.id.joystickR);
+		this.joystickFrame = this.findViewById(R.id.joystickBaseR);
+		this.joystickCenter = this.findViewById(R.id.joystickR);
 
 		this.setScale(scaleRatio, scaleRatio);
 		LayoutParams params = (LayoutParams)this.joystickFrame.getLayoutParams();

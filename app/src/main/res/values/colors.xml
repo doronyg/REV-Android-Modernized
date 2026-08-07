@@ -5,4 +5,10 @@
     <color name="colorAccent">#FF4081</color>
     <color name="red">#FF0000</color>
     <color name="blue">#0000FF</color>
+    <color name="driver_mode_background">#FAFAFA</color>
+    <color name="driver_mode_title_text">#222222</color>
+    <color name="driver_mode_fire_button_background">#D32F2F</color>
+    <color name="driver_mode_fire_button_text">#FFFFFF</color>
+    <color name="driver_mode_secondary_button_background">#E0E0E0</color>
+    <color name="driver_mode_secondary_button_text">#222222</color>
 </resources>

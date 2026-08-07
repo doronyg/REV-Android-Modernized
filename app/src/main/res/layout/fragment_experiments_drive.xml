@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?android:colorBackground">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/experiment_title"
+            android:textColor="?android:textColorPrimary"
+            android:textSize="20sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/experiment_drive_axis"
+            android:textColor="?android:textColorPrimary" />
+
+        <TextView
+            android:id="@+id/tvExperimentDriveValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="?android:textColorSecondary" />
+
+        <SeekBar
+            android:id="@+id/sbExperimentDrive"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/experiment_turn_axis"
+            android:textColor="?android:textColorPrimary" />
+
+        <TextView
+            android:id="@+id/tvExperimentTurnValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="?android:textColorSecondary" />
+
+        <SeekBar
+            android:id="@+id/sbExperimentTurn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/experiment_duration_ms"
+            android:textColor="?android:textColorPrimary" />
+
+        <TextView
+            android:id="@+id/tvExperimentDurationValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="?android:textColorSecondary" />
+
+        <SeekBar
+            android:id="@+id/sbExperimentDuration"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="@string/experiment_interval_ms"
+            android:textColor="?android:textColorPrimary" />
+
+        <TextView
+            android:id="@+id/tvExperimentIntervalValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="?android:textColorSecondary" />
+
+        <SeekBar
+            android:id="@+id/sbExperimentInterval"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnExperimentStart"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/experiment_start"
+                android:textAllCaps="false" />
+
+            <Button
+                android:id="@+id/btnExperimentStop"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:enabled="false"
+                android:text="@string/experiment_stop"
+                android:textAllCaps="false" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btnExperimentBack"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="@string/experiment_back_to_manual"
+            android:textAllCaps="false" />
+
+        <TextView
+            android:id="@+id/tvExperimentSummary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:background="?attr/colorButtonNormal"
+            android:padding="10dp"
+            android:textColor="?android:textColorPrimary"
+            android:textSize="13sp" />
+
+    </LinearLayout>
+</ScrollView>
+
+

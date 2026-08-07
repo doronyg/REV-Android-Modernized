@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="driver_mode_background">#121212</color>
+    <color name="driver_mode_title_text">#DDFFFFFF</color>
+    <color name="driver_mode_fire_button_background">#D32F2F</color>
+    <color name="driver_mode_fire_button_text">#FFFFFFFF</color>
+    <color name="driver_mode_secondary_button_background">#2A2A2A</color>
+    <color name="driver_mode_secondary_button_text">#EDEDED</color>
+</resources>
+

@@ -6,6 +6,8 @@ object AppPreferences {
 
     private const val PREFS_NAME = "rev_scan_prefs"
     private const val PREF_HAS_CONNECTED_REV = "has_connected_rev"
+    private const val PREF_HAS_SEEN_DRIVER_MODE_INSTRUCTIONS = "has_seen_driver_mode_instructions"
+    private const val PREF_PATH_MODE_INSTRUCTIONS_SEEN = "path_mode_instructions_seen"
 
     @JvmStatic
     fun hasConnectedRevBefore(context: Context?): Boolean =
@@ -14,6 +16,24 @@ object AppPreferences {
     @JvmStatic
     fun markHasConnectedRev(context: Context?) {
         putBoolean(context, PREF_HAS_CONNECTED_REV, true)
+    }
+
+    @JvmStatic
+    fun hasSeenDriverModeInstructions(context: Context?): Boolean =
+        getBoolean(context, PREF_HAS_SEEN_DRIVER_MODE_INSTRUCTIONS, false)
+
+    @JvmStatic
+    fun markSeenDriverModeInstructions(context: Context?) {
+        putBoolean(context, PREF_HAS_SEEN_DRIVER_MODE_INSTRUCTIONS, true)
+    }
+
+    @JvmStatic
+    fun hasSeenPathModeInstructions(context: Context?): Boolean =
+        getBoolean(context, PREF_PATH_MODE_INSTRUCTIONS_SEEN, false)
+
+    @JvmStatic
+    fun markSeenPathModeInstructions(context: Context?) {
+        putBoolean(context, PREF_PATH_MODE_INSTRUCTIONS_SEEN, true)
     }
 
     @JvmStatic

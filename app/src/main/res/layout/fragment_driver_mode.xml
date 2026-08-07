@@ -3,7 +3,7 @@
     android:id="@+id/driver_mode_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#121212">
+    android:background="?android:colorBackground">
 
     <View
         android:id="@+id/driver_touch_area"
@@ -60,9 +60,34 @@
         android:layout_height="wrap_content"
         android:layout_centerHorizontal="true"
         android:layout_marginTop="20dp"
-        android:text="Driver Mode"
-        android:textColor="#DDFFFFFF"
+        android:text="@string/driver_mode_title"
+        android:textColor="?android:textColorPrimary"
         android:textSize="18sp" />
+
+    <Button
+        android:id="@+id/btnDriverHelp"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentEnd="true"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="16dp"
+        android:background="?attr/colorButtonNormal"
+        android:text="@string/driver_mode_help"
+        android:textAllCaps="false"
+        android:textColor="?android:textColorPrimary" />
+
+    <Button
+        android:id="@+id/btnMode"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:layout_above="@id/btnFire"
+        android:layout_centerHorizontal="true"
+        android:layout_marginBottom="12dp"
+        android:background="?attr/colorButtonNormal"
+        android:text="@string/driver_mode_switch"
+        android:textAllCaps="false"
+        android:textColor="?android:textColorPrimary" />
 
     <Button
         android:id="@+id/btnFire"
@@ -70,10 +95,10 @@
         android:layout_height="56dp"
         android:layout_centerHorizontal="true"
         android:layout_centerVertical="true"
-        android:background="#D32F2F"
+        android:background="?attr/colorAccent"
         android:text="@string/fire"
         android:textAllCaps="false"
-        android:textColor="#FFFFFFFF"
+        android:textColor="?android:textColorPrimaryInverse"
         android:textSize="18sp" />
 
 </RelativeLayout>

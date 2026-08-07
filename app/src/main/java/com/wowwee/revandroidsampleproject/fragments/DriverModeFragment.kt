@@ -12,21 +12,24 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
+import android.support.v7.app.AlertDialog
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotConstant
-import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotFinder
 import com.wowwee.revandroidsampleproject.R
+import com.wowwee.revandroidsampleproject.utils.AppPreferences
+import com.wowwee.revandroidsampleproject.utils.DriveCommandSampler
 import com.wowwee.revandroidsampleproject.utils.JoystickView
 import com.wowwee.revandroidsampleproject.utils.Player
 import com.wowwee.revandroidsampleproject.utils.REVPlayer
 
-class DriverModeFragment : BaseViewFragment() {
+class DriverModeFragment : ConnectedRevFragment() {
 
     companion object {
         private const val ARG_DEVICE_ADDRESS = "arg_device_address"
         private const val DRIVE_LOOP_MS = 80L
         private const val DEFAULT_DRIVE_SPEED = 1.0f
-        private const val DEFAULT_TURN_SPEED = 1.0f
+        private const val DEFAULT_TURN_SPEED = 0.5f
 
         @JvmStatic
         fun newInstance(deviceAddress: String?): DriverModeFragment {
@@ -44,6 +47,8 @@ class DriverModeFragment : BaseViewFragment() {
     private lateinit var joystickThumbLeft: ImageView
     private lateinit var joystickThumbRight: ImageView
     private lateinit var btnFire: Button
+    private lateinit var btnMode: Button
+    private lateinit var btnDriverHelp: Button
     private lateinit var tvTitle: TextView
 
     private val movementVector = floatArrayOf(0f, 0f)
@@ -58,8 +63,8 @@ class DriverModeFragment : BaseViewFragment() {
     }
 
     @SuppressLint("ClickableViewAccessibility")
-    private val driveTouchListener = View.OnTouchListener { v, event ->
-        handleDriveTouch(v, event)
+    private val driveTouchListener = View.OnTouchListener { _, event ->
+        handleDriveTouch(event)
     }
 
     override fun layoutId(): Int = R.layout.fragment_driver_mode
@@ -73,6 +78,8 @@ class DriverModeFragment : BaseViewFragment() {
         joystickThumbLeft = view.findViewById(R.id.joystickL)
         joystickThumbRight = view.findViewById(R.id.joystickR)
         btnFire = view.findViewById(R.id.btnFire)
+        btnMode = view.findViewById(R.id.btnMode)
+        btnDriverHelp = view.findViewById(R.id.btnDriverHelp)
         tvTitle = view.findViewById(R.id.tvDriverModeTitle)
 
         joystickLeft.updateLeftView()
@@ -91,13 +98,23 @@ class DriverModeFragment : BaseViewFragment() {
                 Player.getInstance().gunFire(robot, 0)
             }
         }
+        btnMode.setOnClickListener {
+            Toast.makeText(requireContext(), R.string.driver_mode_switch_hint, Toast.LENGTH_SHORT).show()
+        }
+        btnMode.setOnLongClickListener {
+            showModeSelectionDialog()
+            true
+        }
+        btnDriverHelp.setOnClickListener {
+            showDriverInstructions()
+        }
 
         return view
     }
 
     override fun onResume() {
         super.onResume()
-        rev = resolveTargetRev()
+        rev = resolveTargetRev(ARG_DEVICE_ADDRESS)
         if (rev == null) {
             navigateBackToScan()
             return
@@ -105,11 +122,76 @@ class DriverModeFragment : BaseViewFragment() {
 
         rev?.setCallbackInterface(this)
         REVPlayer.getInstance().setPlayerRev(rev)
-        rev?.revSetTrackingMode(REVRobotConstant.revRobotTrackingMode.REVTrackingUserControl)
-        tvTitle.text = "Driver Mode: ${rev?.name ?: "REV"}"
+        switchToDriverMode()
+        tvTitle.text = getString(R.string.driver_mode_title_format, rev?.name ?: "REV")
+        maybeShowFirstTimeInstructions()
 
         driveHandler.removeCallbacks(driveLoopRunnable)
         driveHandler.post(driveLoopRunnable)
+    }
+
+    private fun maybeShowFirstTimeInstructions() {
+        val context = context ?: return
+        if (!AppPreferences.hasSeenDriverModeInstructions(context)) {
+            showDriverInstructions()
+            AppPreferences.markSeenDriverModeInstructions(context)
+        }
+    }
+
+    private fun showDriverInstructions() {
+        val context = context ?: return
+        AlertDialog.Builder(context)
+            .setTitle(R.string.driver_mode_instructions_title)
+            .setMessage(R.string.driver_mode_instructions_body)
+            .setPositiveButton(R.string.driver_mode_instructions_got_it, null)
+            .show()
+    }
+
+    private fun switchToDriverMode() {
+        rev?.revSetTrackingMode(REVRobotConstant.revRobotTrackingMode.REVTrackingUserControl)
+        movementVector[0] = 0f
+        movementVector[1] = 0f
+        sendDriveVector(0f, 0f)
+    }
+
+    private fun showModeSelectionDialog() {
+        val context = context ?: return
+        val modes = arrayOf(
+            getString(R.string.driver_mode_option_manual),
+            getString(R.string.driver_mode_option_path),
+            getString(R.string.driver_mode_option_experiments)
+        )
+
+        AlertDialog.Builder(context)
+            .setTitle(R.string.driver_mode_switch_title)
+            .setItems(modes) { _, which ->
+                when (which) {
+                    1 -> navigateToPathMode()
+                    2 -> navigateToExperimentsMode()
+                    else -> switchToDriverMode()
+                }
+            }
+            .show()
+    }
+
+    private fun navigateToPathMode() {
+        val activity = activity ?: return
+        FragmentHelper.switchFragment(
+            activity.supportFragmentManager,
+            PathDriveFragment.newInstance(currentDeviceAddress(ARG_DEVICE_ADDRESS)),
+            R.id.view_id_content,
+            false
+        )
+    }
+
+    private fun navigateToExperimentsMode() {
+        val activity = activity ?: return
+        FragmentHelper.switchFragment(
+            activity.supportFragmentManager,
+            ExperimentsDriveFragment.newInstance(currentDeviceAddress(ARG_DEVICE_ADDRESS)),
+            R.id.view_id_content,
+            false
+        )
     }
 
     override fun onPause() {
@@ -120,7 +202,7 @@ class DriverModeFragment : BaseViewFragment() {
         sendDriveVector(0f, 0f)
     }
 
-    private fun handleDriveTouch(v: View, event: MotionEvent): Boolean {
+    private fun handleDriveTouch(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 if (!joystickLeft.isTouchToTrack()) {
@@ -188,6 +270,12 @@ class DriverModeFragment : BaseViewFragment() {
         if (sendVector[1] < 0f) {
             sendVector[0] *= -1f
         }
+        DriveCommandSampler.logDrive(
+            source = "manual.tick",
+            x = sendVector[0],
+            y = sendVector[1],
+            note = "mx=${movementVector[0]} my=${movementVector[1]}"
+        )
         robot.revDrive(sendVector, DEFAULT_DRIVE_SPEED, DEFAULT_TURN_SPEED)
     }
 
@@ -195,35 +283,10 @@ class DriverModeFragment : BaseViewFragment() {
         val robot = rev ?: return
         sendVector[0] = x
         sendVector[1] = y
+        DriveCommandSampler.logDrive(source = "manual.direct", x = sendVector[0], y = sendVector[1])
         robot.revDrive(sendVector, DEFAULT_DRIVE_SPEED, DEFAULT_TURN_SPEED)
     }
 
-    private fun resolveTargetRev(): REVRobot? {
-        val requestedAddress = arguments?.getString(ARG_DEVICE_ADDRESS)
-        if (!requestedAddress.isNullOrEmpty()) {
-            for (robot in REVRobotFinder.getInstance().getmRevRobotConnectedList()) {
-                val address = safeAddress(robot)
-                if (requestedAddress.equals(address, ignoreCase = true)) {
-                    return robot
-                }
-            }
-        }
-
-        return REVPlayer.getInstance().playerRev ?: REVRobotFinder.getInstance().firstConnectedREV()
-    }
-
-    private fun safeAddress(robot: REVRobot): String? {
-        return try {
-            robot.bluetoothDevice?.address
-        } catch (_: SecurityException) {
-            null
-        }
-    }
-
-    private fun navigateBackToScan() {
-        val activity = activity ?: return
-        FragmentHelper.switchFragment(activity.supportFragmentManager, ScanFragment(), R.id.view_id_content, false)
-    }
 
     private fun lockJoystickToCurrentCenter(joystick: JoystickView) {
         val center = Point(joystick.left + joystick.width / 2, joystick.top + joystick.height / 2)
