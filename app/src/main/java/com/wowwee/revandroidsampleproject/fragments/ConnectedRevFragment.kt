@@ -28,6 +28,12 @@ abstract class ConnectedRevFragment : BaseViewFragment(), KioskLockInterface {
             ?: arguments?.getString(argumentKey)
     }
 
+    protected fun isSimulatorMode(): Boolean = REVPlayer.getInstance().isSimulatorMode
+
+    protected fun displayRevName(defaultName: String = "REV"): String {
+        return rev?.name ?: REVPlayer.getInstance().simulatorName ?: defaultName
+    }
+
     protected fun navigateBackToScan() {
         val activity = activity ?: return
         FragmentHelper.switchFragment(activity.supportFragmentManager, ScanFragment(), R.id.view_id_content, false)

@@ -98,7 +98,7 @@ class ExperimentsDriveFragment : ConnectedRevFragment() {
     override fun onResume() {
         super.onResume()
         rev = resolveTargetRev(ARG_DEVICE_ADDRESS)
-        if (rev == null) {
+        if (rev == null && !isSimulatorMode()) {
             navigateBackToScan()
             return
         }

@@ -24,6 +24,7 @@ public class ScanFragment extends BaseViewFragment {
     private TextView tvScanStatus;
     private Button btnScanRetry;
     private Button btnScanDiscovery;
+    private Button btnScanSimulator;
     private boolean shouldShowDiscoveryButton;
 
     private final RevScanStateMachine.Listener scanListener = new RevScanStateMachine.Listener() {
@@ -51,6 +52,7 @@ public class ScanFragment extends BaseViewFragment {
         @Override
         public void onNavigateToDriverMode(REVRobot connectedRev) {
             REVPlayer.getInstance().setPlayerRev(connectedRev);
+            REVPlayer.getInstance().setSimulatorMode(false);
             AppPreferences.markHasConnectedRev(getActivity());
             String connectedRevAddress = safeRevAddress(connectedRev);
             FragmentHelper.switchFragment(getFragmentActivity().getSupportFragmentManager(), AdvancedDrivingFragment.newInstance(connectedRevAddress), R.id.view_id_content, false);
@@ -74,8 +76,10 @@ public class ScanFragment extends BaseViewFragment {
         tvScanStatus = view.findViewById(R.id.tvScanStatus);
         btnScanRetry = view.findViewById(R.id.btnScanRetry);
         btnScanDiscovery = view.findViewById(R.id.btnScanDiscovery);
+        btnScanSimulator = view.findViewById(R.id.btnScanSimulator);
         btnScanRetry.setOnClickListener(v -> scanStateMachine.retry());
         btnScanDiscovery.setOnClickListener(v -> PermissionsFlowHelper.openDiscoveryFragment(getActivity()));
+        btnScanSimulator.setOnClickListener(v -> openSimulatorMode());
         updateDiscoveryButtonVisibility();
         return view;
     }
@@ -84,6 +88,16 @@ public class ScanFragment extends BaseViewFragment {
     public void onResume() {
         super.onResume();
         Log.d(TAG, "onResume() start.");
+
+        if (REVPlayer.getInstance().isSimulatorMode()) {
+            updateScanStatus(getString(R.string.scan_status_simulator_ready), false);
+            shouldShowDiscoveryButton = false;
+            updateDiscoveryButtonVisibility();
+            btnScanSimulator.setText(R.string.scan_disable_simulator);
+            return;
+        }
+
+        btnScanSimulator.setText(R.string.scan_open_simulator);
         shouldShowDiscoveryButton = !AppPreferences.hasConnectedRevBefore(getActivity());
         updateDiscoveryButtonVisibility();
         scanStateMachine.start(getActivity(), scanListener, this);
@@ -92,7 +106,28 @@ public class ScanFragment extends BaseViewFragment {
     @Override
     public void onPause() {
         super.onPause();
+        if (!REVPlayer.getInstance().isSimulatorMode()) {
+            scanStateMachine.stop();
+        }
+    }
+
+    private void openSimulatorMode() {
+        if (REVPlayer.getInstance().isSimulatorMode()) {
+            REVPlayer.getInstance().setSimulatorMode(false);
+            updateScanStatus(getString(R.string.scan_status_preparing), false);
+            shouldShowDiscoveryButton = !AppPreferences.hasConnectedRevBefore(getActivity());
+            updateDiscoveryButtonVisibility();
+            btnScanSimulator.setText(R.string.scan_open_simulator);
+            scanStateMachine.start(getActivity(), scanListener, this);
+            return;
+        }
+
+        REVPlayer.getInstance().setSimulatorMode(true);
+        REVPlayer.getInstance().setPlayerRev(null);
+        REVPlayer.getInstance().setSimulatorName(getString(R.string.scan_simulator_default_name));
         scanStateMachine.stop();
+        btnScanSimulator.setText(R.string.scan_disable_simulator);
+        FragmentHelper.switchFragment(getFragmentActivity().getSupportFragmentManager(), AdvancedDrivingFragment.newInstance(null), R.id.view_id_content, false);
     }
 
     private void updateScanStatus(String status, boolean showRetry) {

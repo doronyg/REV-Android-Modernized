@@ -115,7 +115,7 @@ class DriverModeFragment : ConnectedRevFragment() {
     override fun onResume() {
         super.onResume()
         rev = resolveTargetRev(ARG_DEVICE_ADDRESS)
-        if (rev == null) {
+        if (rev == null && !isSimulatorMode()) {
             navigateBackToScan()
             return
         }
@@ -123,7 +123,7 @@ class DriverModeFragment : ConnectedRevFragment() {
         rev?.setCallbackInterface(this)
         REVPlayer.getInstance().setPlayerRev(rev)
         switchToDriverMode()
-        tvTitle.text = getString(R.string.driver_mode_title_format, rev?.name ?: "REV")
+        tvTitle.text = getString(R.string.driver_mode_title_format, displayRevName())
         maybeShowFirstTimeInstructions()
 
         driveHandler.removeCallbacks(driveLoopRunnable)

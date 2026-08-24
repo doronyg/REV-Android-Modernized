@@ -120,7 +120,7 @@ class PathDriveFragment : ConnectedRevFragment() {
     override fun onResume() {
         super.onResume()
         rev = resolveTargetRev(ARG_DEVICE_ADDRESS)
-        if (rev == null) {
+        if (rev == null && !isSimulatorMode()) {
             navigateBackToScan()
             return
         }
@@ -231,7 +231,8 @@ class PathDriveFragment : ConnectedRevFragment() {
     }
 
     private fun runCurrentStep() {
-        if (!isRunning || currentStepIndex >= runSteps.size || rev == null || rev.isDead) {
+        val robot = rev
+        if (!isRunning || currentStepIndex >= runSteps.size || robot == null || robot.isDead) {
             stopRun()
             return
         }
@@ -253,9 +254,9 @@ class PathDriveFragment : ConnectedRevFragment() {
         )
 
         when (step.action) {
-            ActionType.FORWARD -> rev.revDriveForwardWithTime(seconds)
-            ActionType.TURN_LEFT -> rev.revTurnLeftByTime(seconds, DEFAULT_TURN_SPEED)
-            ActionType.TURN_RIGHT -> rev.revTurnRightByTime(seconds, DEFAULT_TURN_SPEED)
+            ActionType.FORWARD -> robot.revDriveForwardWithTime(seconds)
+            ActionType.TURN_LEFT -> robot.revTurnLeftByTime(seconds, DEFAULT_TURN_SPEED)
+            ActionType.TURN_RIGHT -> robot.revTurnRightByTime(seconds, DEFAULT_TURN_SPEED)
         }
 
         currentStepIndex += 1
