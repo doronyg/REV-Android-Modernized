@@ -53,7 +53,7 @@ public class ScanFragment extends BaseViewFragment {
             REVPlayer.getInstance().setPlayerRev(connectedRev);
             AppPreferences.markHasConnectedRev(getActivity());
             String connectedRevAddress = safeRevAddress(connectedRev);
-            FragmentHelper.switchFragment(getFragmentActivity().getSupportFragmentManager(), DriverModeFragment.newInstance(connectedRevAddress), R.id.view_id_content, false);
+            FragmentHelper.switchFragment(getFragmentActivity().getSupportFragmentManager(), AdvancedDrivingFragment.newInstance(connectedRevAddress), R.id.view_id_content, false);
         }
     };
 

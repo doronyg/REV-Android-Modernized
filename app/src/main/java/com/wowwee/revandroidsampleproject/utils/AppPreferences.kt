@@ -3,11 +3,14 @@ package com.wowwee.revandroidsampleproject.utils
 import android.content.Context
 import androidx.core.content.edit
 
+private const val DEFAULT_KIOSK_MODE_ON = true
+
 object AppPreferences {
 
     private const val PREFS_NAME = "rev_scan_prefs"
     private const val PREF_HAS_CONNECTED_REV = "has_connected_rev"
     private const val PREF_HAS_SEEN_DRIVER_MODE_INSTRUCTIONS = "has_seen_driver_mode_instructions"
+    private const val PREF_HAS_SEEN_ADVANCED_MODE_INSTRUCTIONS = "has_seen_advanced_mode_instructions"
     private const val PREF_PATH_MODE_INSTRUCTIONS_SEEN = "path_mode_instructions_seen"
     private const val PREF_KIOSK_ENABLE_ALLOWED_AT_MS = "kiosk_enable_allowed_at_ms"
     private const val PREF_KIOSK_LOCK_GLOBALLY_ENABLED = "kiosk_lock_globally_enabled"
@@ -18,7 +21,7 @@ object AppPreferences {
 
     @JvmStatic
     fun markHasConnectedRev(context: Context?) {
-        putBoolean(context, PREF_HAS_CONNECTED_REV, true)
+        putBoolean(context, PREF_HAS_CONNECTED_REV, DEFAULT_KIOSK_MODE_ON)
     }
 
     @JvmStatic
@@ -27,7 +30,16 @@ object AppPreferences {
 
     @JvmStatic
     fun markSeenDriverModeInstructions(context: Context?) {
-        putBoolean(context, PREF_HAS_SEEN_DRIVER_MODE_INSTRUCTIONS, true)
+        putBoolean(context, PREF_HAS_SEEN_DRIVER_MODE_INSTRUCTIONS, DEFAULT_KIOSK_MODE_ON)
+    }
+
+    @JvmStatic
+    fun hasSeenAdvancedModeInstructions(context: Context?): Boolean =
+        getBoolean(context, PREF_HAS_SEEN_ADVANCED_MODE_INSTRUCTIONS, false)
+
+    @JvmStatic
+    fun markSeenAdvancedModeInstructions(context: Context?) {
+        putBoolean(context, PREF_HAS_SEEN_ADVANCED_MODE_INSTRUCTIONS, DEFAULT_KIOSK_MODE_ON)
     }
 
     @JvmStatic
@@ -36,7 +48,7 @@ object AppPreferences {
 
     @JvmStatic
     fun markSeenPathModeInstructions(context: Context?) {
-        putBoolean(context, PREF_PATH_MODE_INSTRUCTIONS_SEEN, true)
+        putBoolean(context, PREF_PATH_MODE_INSTRUCTIONS_SEEN, DEFAULT_KIOSK_MODE_ON)
     }
 
     @JvmStatic
@@ -50,7 +62,7 @@ object AppPreferences {
 
     @JvmStatic
     fun isKioskLockGloballyEnabled(context: Context?): Boolean =
-        getBoolean(context, PREF_KIOSK_LOCK_GLOBALLY_ENABLED, true)
+        getBoolean(context, PREF_KIOSK_LOCK_GLOBALLY_ENABLED, DEFAULT_KIOSK_MODE_ON)
 
     @JvmStatic
     fun setKioskLockGloballyEnabled(context: Context?, enabled: Boolean) {

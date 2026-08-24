@@ -1,7 +1,6 @@
 package com.wowwee.revandroidsampleproject.fragments
 
 import android.annotation.SuppressLint
-import android.graphics.Point
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -22,8 +21,9 @@ import com.wowwee.revandroidsampleproject.utils.DriveCommandSampler
 import com.wowwee.revandroidsampleproject.utils.JoystickView
 import com.wowwee.revandroidsampleproject.utils.Player
 import com.wowwee.revandroidsampleproject.utils.REVPlayer
+import kotlin.math.sqrt
 
-class DriverModeFragment : ConnectedRevFragment() {
+class AdvancedDrivingFragment : ConnectedRevFragment() {
 
     companion object {
         private const val ARG_DEVICE_ADDRESS = "arg_device_address"
@@ -32,8 +32,8 @@ class DriverModeFragment : ConnectedRevFragment() {
         private const val DEFAULT_TURN_SPEED = 0.5f
 
         @JvmStatic
-        fun newInstance(deviceAddress: String?): DriverModeFragment {
-            val fragment = DriverModeFragment()
+        fun newInstance(deviceAddress: String?): AdvancedDrivingFragment {
+            val fragment = AdvancedDrivingFragment()
             val args = Bundle()
             args.putString(ARG_DEVICE_ADDRESS, deviceAddress)
             fragment.arguments = args
@@ -42,14 +42,17 @@ class DriverModeFragment : ConnectedRevFragment() {
     }
 
     private lateinit var touchArea: View
-    private lateinit var joystickLeft: JoystickView
-    private lateinit var joystickRight: JoystickView
-    private lateinit var joystickThumbLeft: ImageView
-    private lateinit var joystickThumbRight: ImageView
+    private lateinit var wheelControl: JoystickView
+    private lateinit var leverControl: JoystickView
+    private lateinit var wheelThumb: ImageView
+    private lateinit var leverThumb: ImageView
     private lateinit var btnFire: Button
     private lateinit var btnMode: Button
     private lateinit var btnDriverHelp: Button
     private lateinit var tvTitle: TextView
+
+    private var wheelPointerId: Int = MotionEvent.INVALID_POINTER_ID
+    private var leverPointerId: Int = MotionEvent.INVALID_POINTER_ID
 
     private val movementVector = floatArrayOf(0f, 0f)
     private val sendVector = floatArrayOf(0f, 0f)
@@ -67,30 +70,28 @@ class DriverModeFragment : ConnectedRevFragment() {
         handleDriveTouch(event)
     }
 
-    override fun layoutId(): Int = R.layout.fragment_driver_mode
+    override fun layoutId(): Int = R.layout.fragment_advanced_driving
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         val view = super.onCreateView(inflater, container, savedInstanceState) ?: return null
 
         touchArea = view.findViewById(R.id.driver_touch_area)
-        joystickLeft = view.findViewById(R.id.layoutleftJoystick)
-        joystickRight = view.findViewById(R.id.layoutrightJoystick)
-        joystickThumbLeft = view.findViewById(R.id.joystickL)
-        joystickThumbRight = view.findViewById(R.id.joystickR)
+        wheelControl = view.findViewById(R.id.layoutWheelControl)
+        leverControl = view.findViewById(R.id.layoutLeverControl)
+        wheelThumb = view.findViewById(R.id.joystickR)
+        leverThumb = view.findViewById(R.id.joystickL)
         btnFire = view.findViewById(R.id.btnFire)
         btnMode = view.findViewById(R.id.btnMode)
         btnDriverHelp = view.findViewById(R.id.btnDriverHelp)
         tvTitle = view.findViewById(R.id.tvDriverModeTitle)
 
-        joystickLeft.updateLeftView()
-        joystickLeft.visibility = View.VISIBLE
-        joystickRight.updateRightView()
-        joystickRight.visibility = View.VISIBLE
+        wheelControl.updateRightView()
+        wheelControl.visibility = View.VISIBLE
+        leverControl.updateLeftView()
+        leverControl.visibility = View.VISIBLE
 
-        joystickLeft.post { lockJoystickToCurrentCenter(joystickLeft) }
-        joystickRight.post { lockJoystickToCurrentCenter(joystickRight) }
-        joystickThumbLeft.visibility = View.INVISIBLE
-        joystickThumbRight.visibility = View.INVISIBLE
+        wheelControl.post { resetWheelThumbPosition() }
+        leverControl.post { resetLeverThumbPosition() }
 
         touchArea.setOnTouchListener(driveTouchListener)
         btnFire.setOnClickListener {
@@ -123,7 +124,7 @@ class DriverModeFragment : ConnectedRevFragment() {
         rev?.setCallbackInterface(this)
         REVPlayer.getInstance().setPlayerRev(rev)
         switchToDriverMode()
-        tvTitle.text = getString(R.string.driver_mode_title_format, rev?.name ?: "REV")
+        tvTitle.text = getString(R.string.advanced_mode_title_format, rev?.name ?: "REV")
         maybeShowFirstTimeInstructions()
 
         driveHandler.removeCallbacks(driveLoopRunnable)
@@ -132,17 +133,17 @@ class DriverModeFragment : ConnectedRevFragment() {
 
     private fun maybeShowFirstTimeInstructions() {
         val context = context ?: return
-        if (!AppPreferences.hasSeenDriverModeInstructions(context)) {
+        if (!AppPreferences.hasSeenAdvancedModeInstructions(context)) {
             showDriverInstructions()
-            AppPreferences.markSeenDriverModeInstructions(context)
+            AppPreferences.markSeenAdvancedModeInstructions(context)
         }
     }
 
     private fun showDriverInstructions() {
         val context = context ?: return
         AlertDialog.Builder(context)
-            .setTitle(R.string.driver_mode_instructions_title)
-            .setMessage(R.string.driver_mode_instructions_body)
+            .setTitle(R.string.advanced_mode_instructions_title)
+            .setMessage(R.string.advanced_mode_instructions_body)
             .setPositiveButton(R.string.driver_mode_instructions_got_it, null)
             .show()
     }
@@ -157,7 +158,7 @@ class DriverModeFragment : ConnectedRevFragment() {
     private fun showModeSelectionDialog() {
         DrivingModeSwitch.showModeSelectionDialog(
             host = this,
-            currentMode = DrivingModeOption.MANUAL,
+            currentMode = DrivingModeOption.ADVANCED,
             deviceAddress = currentDeviceAddress(ARG_DEVICE_ADDRESS)
         )
     }
@@ -167,51 +168,55 @@ class DriverModeFragment : ConnectedRevFragment() {
         driveHandler.removeCallbacks(driveLoopRunnable)
         movementVector[0] = 0f
         movementVector[1] = 0f
+        releaseWheelControl()
+        releaseLeverControl()
         sendDriveVector(0f, 0f)
     }
 
     private fun handleDriveTouch(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
-                if (!joystickLeft.isTouchToTrack()) {
-                    if (joystickLeft.touchesBegan(event)) {
-                        joystickThumbLeft.visibility = View.VISIBLE
-                    }
+                val i = event.actionIndex
+                val pointerId = event.getPointerId(i)
+                val x = event.getX(i)
+                val y = event.getY(i)
+
+                if (wheelPointerId == MotionEvent.INVALID_POINTER_ID && isInsideWheelControl(x, y)) {
+                    wheelPointerId = pointerId
+                    updateWheelFromPoint(x)
                 }
-                if (!joystickRight.isTouchToTrack()) {
-                    if (joystickRight.touchesBegan(event)) {
-                        joystickThumbRight.visibility = View.VISIBLE
-                    }
+
+                if (leverPointerId == MotionEvent.INVALID_POINTER_ID && isInsideLeverControl(x, y)) {
+                    leverPointerId = pointerId
+                    updateLeverFromPoint(y)
                 }
             }
 
             MotionEvent.ACTION_MOVE -> {
                 for (i in 0 until event.pointerCount) {
                     val pointerId = event.getPointerId(i)
-                    if (joystickLeft.isTouchToTrack(event, pointerId)) {
-                        joystickLeft.touchesMoved(event, i)
-                        movementVector[1] = joystickLeft.joystickVectorY
+                    if (pointerId == wheelPointerId) {
+                        updateWheelFromPoint(event.getX(i))
                     }
-                    if (joystickRight.isTouchToTrack(event, pointerId)) {
-                        joystickRight.touchesMoved(event, i)
-                        movementVector[0] = joystickRight.joystickVectorX
+                    if (pointerId == leverPointerId) {
+                        updateLeverFromPoint(event.getY(i))
                     }
                 }
             }
 
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_CANCEL -> {
-                val pointerId = event.getPointerId(event.actionIndex)
-                if (joystickLeft.isTouchToTrack(event, pointerId)) {
-                    joystickLeft.touchesEnded(event)
-                    movementVector[1] = 0f
-                    lockJoystickToCurrentCenter(joystickLeft)
-                    joystickThumbLeft.visibility = View.INVISIBLE
+                if (event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                    releaseWheelControl()
+                    releaseLeverControl()
+                    return true
                 }
-                if (joystickRight.isTouchToTrack(event, pointerId)) {
-                    joystickRight.touchesEnded(event)
-                    movementVector[0] = 0f
-                    lockJoystickToCurrentCenter(joystickRight)
-                    joystickThumbRight.visibility = View.INVISIBLE
+
+                val pointerId = event.getPointerId(event.actionIndex)
+                if (pointerId == wheelPointerId) {
+                    releaseWheelControl()
+                }
+                if (pointerId == leverPointerId) {
+                    releaseLeverControl()
                 }
             }
         }
@@ -239,7 +244,7 @@ class DriverModeFragment : ConnectedRevFragment() {
             sendVector[0] *= -1f
         }
         DriveCommandSampler.logDrive(
-            source = "manual.tick",
+            source = "advanced.tick",
             x = sendVector[0],
             y = sendVector[1],
             note = "mx=${movementVector[0]} my=${movementVector[1]}"
@@ -251,15 +256,81 @@ class DriverModeFragment : ConnectedRevFragment() {
         val robot = rev ?: return
         sendVector[0] = x
         sendVector[1] = y
-        DriveCommandSampler.logDrive(source = "manual.direct", x = sendVector[0], y = sendVector[1])
+        DriveCommandSampler.logDrive(source = "advanced.direct", x = sendVector[0], y = sendVector[1])
         robot.revDrive(sendVector, DEFAULT_DRIVE_SPEED, DEFAULT_TURN_SPEED)
     }
 
-    private fun lockJoystickToCurrentCenter(joystick: JoystickView) {
-        val center = Point(joystick.left + joystick.width / 2, joystick.top + joystick.height / 2)
-        joystick.setCenter(center)
+    private fun isInsideWheelControl(x: Float, y: Float): Boolean {
+        if (x < wheelControl.left || x > wheelControl.right || y < wheelControl.top || y > wheelControl.bottom) {
+            return false
+        }
+
+        val centerX = (wheelControl.left + wheelControl.right) / 2f
+        val centerY = wheelControl.bottom.toFloat()
+        val radius = wheelControl.width / 2f
+        val dx = x - centerX
+        val dy = y - centerY
+        return (dy <= 0f) && (dx * dx + dy * dy <= radius * radius)
+    }
+
+    private fun isInsideLeverControl(x: Float, y: Float): Boolean {
+        return x >= leverControl.left && x <= leverControl.right && y >= leverControl.top && y <= leverControl.bottom
+    }
+
+    private fun updateWheelFromPoint(x: Float) {
+        val centerX = (wheelControl.left + wheelControl.right) / 2f
+        val radius = wheelControl.width / 2f
+        val normalizedTurn = ((x - centerX) / radius).coerceIn(-1f, 1f)
+        movementVector[0] = normalizedTurn
+        positionWheelThumb(normalizedTurn)
+    }
+
+    private fun positionWheelThumb(turn: Float) {
+        val radius = wheelControl.width / 2f
+        val visualRadius = radius * 0.72f
+        val centerX = wheelControl.width / 2f
+        val centerY = wheelControl.height.toFloat()
+        val x = turn * visualRadius
+        val y = -sqrt((visualRadius * visualRadius - x * x).coerceAtLeast(0f))
+        wheelThumb.x = centerX + x - wheelThumb.width / 2f
+        wheelThumb.y = centerY + y - wheelThumb.height / 2f
+    }
+
+    private fun resetWheelThumbPosition() {
+        positionWheelThumb(0f)
+    }
+
+    private fun updateLeverFromPoint(y: Float) {
+        val centerY = (leverControl.top + leverControl.bottom) / 2f
+        val range = ((leverControl.height - leverThumb.height) / 2f).coerceAtLeast(1f)
+        val normalizedDrive = ((centerY - y) / range).coerceIn(-1f, 1f)
+        movementVector[1] = normalizedDrive
+        positionLeverThumb(normalizedDrive)
+    }
+
+    private fun positionLeverThumb(drive: Float) {
+        val centerX = leverControl.width / 2f
+        val centerY = leverControl.height / 2f
+        val range = ((leverControl.height - leverThumb.height) / 2f).coerceAtLeast(1f)
+        leverThumb.x = centerX - leverThumb.width / 2f
+        leverThumb.y = centerY - (drive * range) - leverThumb.height / 2f
+    }
+
+    private fun resetLeverThumbPosition() {
+        positionLeverThumb(0f)
+    }
+
+    private fun releaseWheelControl() {
+        wheelPointerId = MotionEvent.INVALID_POINTER_ID
+        movementVector[0] = 0f
+        resetWheelThumbPosition()
+    }
+
+    private fun releaseLeverControl() {
+        leverPointerId = MotionEvent.INVALID_POINTER_ID
+        movementVector[1] = 0f
+        resetLeverThumbPosition()
     }
 }
-
 
 

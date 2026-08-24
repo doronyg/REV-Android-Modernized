@@ -303,14 +303,10 @@ class ExperimentsDriveFragment : ConnectedRevFragment() {
         stopExperiment(true)
         FragmentHelper.switchFragment(
             activity.supportFragmentManager,
-            DriverModeFragment.newInstance(currentDeviceAddress(ARG_DEVICE_ADDRESS)),
+            AdvancedDrivingFragment.newInstance(currentDeviceAddress(ARG_DEVICE_ADDRESS)),
             R.id.view_id_content,
             false
         )
     }
 }
-
-
-
-
 

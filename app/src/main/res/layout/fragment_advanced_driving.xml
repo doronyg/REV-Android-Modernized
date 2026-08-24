@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/advanced_mode_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?android:colorBackground">
+
+    <View
+        android:id="@+id/driver_touch_area"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <com.wowwee.revandroidsampleproject.utils.JoystickView
+        android:id="@+id/layoutLeverControl"
+        android:layout_width="132dp"
+        android:layout_height="360dp"
+        android:layout_alignParentStart="true"
+        android:layout_centerVertical="true"
+        android:layout_marginStart="20dp"
+        android:tag="ignore_scaling">
+
+        <ImageView
+            android:id="@+id/joystickBaseL"
+            android:layout_width="132dp"
+            android:layout_height="360dp"
+            android:background="@drawable/drive_lever_track" />
+
+        <View
+            android:id="@+id/leverCenterMarker"
+            android:layout_width="104dp"
+            android:layout_height="3dp"
+            android:layout_gravity="center"
+            android:background="@drawable/drive_lever_center_marker" />
+
+        <ImageView
+            android:id="@+id/joystickL"
+            android:layout_width="76dp"
+            android:layout_height="76dp"
+            android:background="@drawable/drive_core_ring" />
+    </com.wowwee.revandroidsampleproject.utils.JoystickView>
+
+    <com.wowwee.revandroidsampleproject.utils.JoystickView
+        android:id="@+id/layoutWheelControl"
+        android:layout_width="320dp"
+        android:layout_height="160dp"
+        android:layout_centerHorizontal="true"
+        android:layout_centerVertical="true"
+        android:layout_marginTop="36dp"
+        android:tag="ignore_scaling">
+
+        <ImageView
+            android:id="@+id/joystickBaseR"
+            android:layout_width="320dp"
+            android:layout_height="160dp"
+            android:background="@drawable/drive_wheel_half" />
+
+        <ImageView
+            android:id="@+id/joystickR"
+            android:layout_width="76dp"
+            android:layout_height="76dp"
+            android:background="@drawable/drive_core_ring" />
+    </com.wowwee.revandroidsampleproject.utils.JoystickView>
+
+    <TextView
+        android:id="@+id/tvDriverModeTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="20dp"
+        android:text="@string/advanced_mode_title"
+        android:textColor="?android:textColorPrimary"
+        android:textSize="18sp" />
+
+    <Button
+        android:id="@+id/btnDriverHelp"
+        android:layout_width="120dp"
+        android:layout_height="40dp"
+        android:layout_below="@id/btnFire"
+        android:layout_alignParentEnd="true"
+        android:layout_marginTop="12dp"
+        android:layout_marginEnd="16dp"
+        android:background="?attr/colorButtonNormal"
+        android:text="@string/driver_mode_help"
+        android:textAllCaps="false"
+        android:textColor="?android:textColorPrimary" />
+
+    <Button
+        android:id="@+id/btnMode"
+        android:layout_width="120dp"
+        android:layout_height="40dp"
+        android:layout_above="@id/btnFire"
+        android:layout_alignParentEnd="true"
+        android:layout_marginBottom="12dp"
+        android:layout_marginEnd="16dp"
+        android:background="?attr/colorButtonNormal"
+        android:text="@string/driver_mode_switch"
+        android:textAllCaps="false"
+        android:textColor="?android:textColorPrimary" />
+
+    <Button
+        android:id="@+id/btnFire"
+        android:layout_width="120dp"
+        android:layout_height="56dp"
+        android:layout_alignParentEnd="true"
+        android:layout_centerVertical="true"
+        android:layout_marginEnd="16dp"
+        android:background="?attr/colorAccent"
+        android:text="@string/fire"
+        android:textAllCaps="false"
+        android:textColor="?android:textColorPrimaryInverse"
+        android:textSize="18sp" />
+
+</RelativeLayout>
+

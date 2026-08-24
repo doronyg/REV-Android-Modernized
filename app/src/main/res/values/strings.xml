@@ -37,11 +37,16 @@
     <string name="driver_mode_switch_hint">Long press to change mode</string>
     <string name="driver_mode_switch_title">Select Driving Mode</string>
     <string name="driver_mode_option_manual">Manual Mode</string>
+    <string name="driver_mode_option_advanced">Advanced Wheel Mode</string>
     <string name="driver_mode_option_path">Path Draw Mode</string>
     <string name="driver_mode_option_experiments">Experiments Mode</string>
     <string name="driver_mode_instructions_title">Driver Mode Controls</string>
     <string name="driver_mode_instructions_body">Use the left joystick to drive forward/backward and the right joystick to steer. Tap Fire to shoot. If tracking or AI control changes behavior, tap Back to Driver Mode to regain manual control.</string>
     <string name="driver_mode_instructions_got_it">Got it</string>
+    <string name="advanced_mode_title">Advanced Wheel Mode</string>
+    <string name="advanced_mode_title_format">Advanced Wheel Mode: %1$s</string>
+    <string name="advanced_mode_instructions_title">Advanced Wheel Controls</string>
+    <string name="advanced_mode_instructions_body">Use the left lever for forward/reverse throttle (center line is neutral), and use the center wheel to steer left/right. Tap Fire to shoot.</string>
 
     <string name="path_mode_title">Path Draw Mode</string>
     <string name="path_mode_title_format">Path Draw Mode: %1$s</string>
