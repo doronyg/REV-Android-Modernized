@@ -51,6 +51,8 @@
     <string name="advanced_mode_title_format">Advanced Wheel Mode: %1$s</string>
     <string name="advanced_mode_instructions_title">Advanced Wheel Controls</string>
     <string name="advanced_mode_instructions_body">Use the left lever for forward/reverse throttle (center line is neutral), and use the center wheel to steer left/right. Tap Fire to shoot.</string>
+    <string name="advanced_mode_forward_short">F</string>
+    <string name="advanced_mode_backward_short">B</string>
 
     <string name="path_mode_title">Path Draw Mode</string>
     <string name="path_mode_title_format">Path Draw Mode: %1$s</string>

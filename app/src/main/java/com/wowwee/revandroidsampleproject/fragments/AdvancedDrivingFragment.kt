@@ -1,9 +1,11 @@
 package com.wowwee.revandroidsampleproject.fragments
 
 import android.annotation.SuppressLint
+import android.animation.ValueAnimator
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
@@ -21,6 +23,7 @@ import com.wowwee.revandroidsampleproject.utils.DriveCommandSampler
 import com.wowwee.revandroidsampleproject.utils.JoystickView
 import com.wowwee.revandroidsampleproject.utils.Player
 import com.wowwee.revandroidsampleproject.utils.REVPlayer
+import android.os.SystemClock
 import kotlin.math.sqrt
 
 class AdvancedDrivingFragment : ConnectedRevFragment() {
@@ -30,6 +33,9 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         private const val DRIVE_LOOP_MS = 80L
         private const val DEFAULT_DRIVE_SPEED = 1.0f
         private const val DEFAULT_TURN_SPEED = 0.5f
+        private const val MAX_WHEEL_ROTATION_DEG = 75f
+        private const val MAX_WHEEL_ROTATION_SPEED_DEG_PER_SEC = 900f
+        private const val CENTER_RETURN_ANIM_MS = 170L
 
         @JvmStatic
         fun newInstance(deviceAddress: String?): AdvancedDrivingFragment {
@@ -44,6 +50,7 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
     private lateinit var touchArea: View
     private lateinit var wheelControl: JoystickView
     private lateinit var leverControl: JoystickView
+    private lateinit var wheelBase: ImageView
     private lateinit var wheelThumb: ImageView
     private lateinit var leverThumb: ImageView
     private lateinit var btnFire: Button
@@ -53,6 +60,10 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
 
     private var wheelPointerId: Int = MotionEvent.INVALID_POINTER_ID
     private var leverPointerId: Int = MotionEvent.INVALID_POINTER_ID
+    private var currentWheelRotationDeg = 0f
+    private var lastWheelRotationUpdateMs = 0L
+    private var wheelCenterAnimator: ValueAnimator? = null
+    private var leverCenterAnimator: ValueAnimator? = null
 
     private val movementVector = floatArrayOf(0f, 0f)
     private val sendVector = floatArrayOf(0f, 0f)
@@ -78,6 +89,7 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         touchArea = view.findViewById(R.id.driver_touch_area)
         wheelControl = view.findViewById(R.id.layoutWheelControl)
         leverControl = view.findViewById(R.id.layoutLeverControl)
+        wheelBase = view.findViewById(R.id.joystickBaseR)
         wheelThumb = view.findViewById(R.id.joystickR)
         leverThumb = view.findViewById(R.id.joystickL)
         btnFire = view.findViewById(R.id.btnFire)
@@ -92,6 +104,13 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
 
         wheelControl.post { resetWheelThumbPosition() }
         leverControl.post { resetLeverThumbPosition() }
+        updateWheelThumbVisual(false)
+        rotateWheelBase(0f, force = true)
+        wheelControl.post {
+            wheelBase.pivotX = wheelControl.width / 2f
+            wheelBase.pivotY = wheelControl.height - wheelThumb.height / 2f
+            lastWheelRotationUpdateMs = SystemClock.uptimeMillis()
+        }
 
         touchArea.setOnTouchListener(driveTouchListener)
         btnFire.setOnClickListener {
@@ -184,6 +203,7 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
                 if (wheelPointerId == MotionEvent.INVALID_POINTER_ID && isInsideWheelControl(x, y)) {
                     wheelPointerId = pointerId
                     updateWheelFromPoint(x)
+                    updateWheelThumbVisual(true)
                 }
 
                 if (leverPointerId == MotionEvent.INVALID_POINTER_ID && isInsideLeverControl(x, y)) {
@@ -208,6 +228,7 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
                 if (event.actionMasked == MotionEvent.ACTION_CANCEL) {
                     releaseWheelControl()
                     releaseLeverControl()
+                    updateWheelThumbVisual(false)
                     return true
                 }
 
@@ -261,13 +282,17 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
     }
 
     private fun isInsideWheelControl(x: Float, y: Float): Boolean {
-        if (x < wheelControl.left || x > wheelControl.right || y < wheelControl.top || y > wheelControl.bottom) {
+        val renderedLeft = wheelControl.x
+        val renderedTop = wheelControl.y
+        val renderedRight = renderedLeft + wheelControl.width
+        val renderedBottom = renderedTop + wheelControl.height
+        if (x < renderedLeft || x > renderedRight || y < renderedTop || y > renderedBottom) {
             return false
         }
 
-        val centerX = (wheelControl.left + wheelControl.right) / 2f
-        val centerY = wheelControl.bottom.toFloat()
-        val radius = wheelControl.width / 2f
+        val centerX = renderedLeft + wheelControl.width / 2f
+        val centerY = renderedTop + wheelBase.y + wheelBase.height
+        val radius = wheelBase.width / 2f
         val dx = x - centerX
         val dy = y - centerY
         return (dy <= 0f) && (dx * dx + dy * dy <= radius * radius)
@@ -278,18 +303,21 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
     }
 
     private fun updateWheelFromPoint(x: Float) {
-        val centerX = (wheelControl.left + wheelControl.right) / 2f
-        val radius = wheelControl.width / 2f
-        val normalizedTurn = ((x - centerX) / radius).coerceIn(-1f, 1f)
+        wheelCenterAnimator?.cancel()
+        val centerX = wheelControl.x + wheelControl.width / 2f
+        val radius = wheelBase.width / 2f
+        val inputRadius = (radius * 0.62f).coerceAtLeast(1f)
+        val normalizedTurn = ((x - centerX) / inputRadius).coerceIn(-1f, 1f)
         movementVector[0] = normalizedTurn
+        rotateWheelBase(normalizedTurn)
         positionWheelThumb(normalizedTurn)
     }
 
     private fun positionWheelThumb(turn: Float) {
         val radius = wheelControl.width / 2f
-        val visualRadius = radius * 0.72f
+        val visualRadius = (radius - wheelThumb.width / 2f).coerceAtLeast(1f)
         val centerX = wheelControl.width / 2f
-        val centerY = wheelControl.height.toFloat()
+        val centerY = wheelControl.height - wheelThumb.height / 2f
         val x = turn * visualRadius
         val y = -sqrt((visualRadius * visualRadius - x * x).coerceAtLeast(0f))
         wheelThumb.x = centerX + x - wheelThumb.width / 2f
@@ -301,6 +329,7 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
     }
 
     private fun updateLeverFromPoint(y: Float) {
+        leverCenterAnimator?.cancel()
         val centerY = (leverControl.top + leverControl.bottom) / 2f
         val range = ((leverControl.height - leverThumb.height) / 2f).coerceAtLeast(1f)
         val normalizedDrive = ((centerY - y) / range).coerceIn(-1f, 1f)
@@ -321,15 +350,81 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
     }
 
     private fun releaseWheelControl() {
+        val startTurn = movementVector[0]
+        val startRotation = currentWheelRotationDeg
         wheelPointerId = MotionEvent.INVALID_POINTER_ID
         movementVector[0] = 0f
-        resetWheelThumbPosition()
+        animateWheelBackToCenter(startTurn, startRotation)
+        updateWheelThumbVisual(false)
     }
 
     private fun releaseLeverControl() {
+        val startDrive = movementVector[1]
         leverPointerId = MotionEvent.INVALID_POINTER_ID
         movementVector[1] = 0f
-        resetLeverThumbPosition()
+        animateLeverBackToCenter(startDrive)
+    }
+
+    private fun updateWheelThumbVisual(active: Boolean) {
+        wheelThumb.setBackgroundResource(
+            if (active) R.drawable.drive_thumb_race_car_active else R.drawable.drive_thumb_race_car
+        )
+        wheelThumb.animate()
+            .scaleX(if (active) 1.08f else 1f)
+            .scaleY(if (active) 1.08f else 1f)
+            .setDuration(110)
+            .start()
+    }
+
+    private fun rotateWheelBase(turn: Float, force: Boolean = false) {
+        val targetRotation = turn.coerceIn(-1f, 1f) * MAX_WHEEL_ROTATION_DEG
+        val now = SystemClock.uptimeMillis()
+
+        if (force || lastWheelRotationUpdateMs <= 0L) {
+            currentWheelRotationDeg = targetRotation
+            wheelBase.rotation = targetRotation
+            wheelThumb.rotation = targetRotation
+            lastWheelRotationUpdateMs = now
+            return
+        }
+
+        val dtMs = (now - lastWheelRotationUpdateMs).coerceAtLeast(1L)
+        val maxStep = (MAX_WHEEL_ROTATION_SPEED_DEG_PER_SEC * dtMs / 1000f).coerceAtLeast(0.8f)
+        val delta = (targetRotation - currentWheelRotationDeg).coerceIn(-maxStep, maxStep)
+        currentWheelRotationDeg += delta
+        wheelBase.rotation = currentWheelRotationDeg
+        wheelThumb.rotation = currentWheelRotationDeg
+        lastWheelRotationUpdateMs = now
+    }
+
+    private fun animateWheelBackToCenter(startTurn: Float, startRotation: Float) {
+        wheelCenterAnimator?.cancel()
+        wheelCenterAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = CENTER_RETURN_ANIM_MS
+            interpolator = AccelerateDecelerateInterpolator()
+            addUpdateListener { animator ->
+                val t = animator.animatedValue as Float
+                val easedTurn = startTurn * (1f - t)
+                currentWheelRotationDeg = startRotation * (1f - t)
+                wheelBase.rotation = currentWheelRotationDeg
+                wheelThumb.rotation = currentWheelRotationDeg
+                positionWheelThumb(easedTurn)
+            }
+            start()
+        }
+    }
+
+    private fun animateLeverBackToCenter(startDrive: Float) {
+        leverCenterAnimator?.cancel()
+        leverCenterAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = CENTER_RETURN_ANIM_MS
+            interpolator = AccelerateDecelerateInterpolator()
+            addUpdateListener { animator ->
+                val t = animator.animatedValue as Float
+                positionLeverThumb(startDrive * (1f - t))
+            }
+            start()
+        }
     }
 }
 
