@@ -2,7 +2,6 @@ package com.wowwee.revandroidsampleproject.utils;
 
 import android.content.Context;
 import android.graphics.Color;
-import android.support.v4.app.FragmentActivity;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -11,6 +10,7 @@ import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
 import android.widget.ArrayAdapter;
 import android.widget.TextView;
+import androidx.fragment.app.FragmentActivity;
 
 import com.wowwee.revandroidsampleproject.R;
 import com.wowwee.revandroidsampleproject.ai.AIPlayerManager;

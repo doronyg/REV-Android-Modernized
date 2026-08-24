@@ -5,7 +5,7 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Handler;
 import android.os.Looper;
-import android.support.v4.app.FragmentActivity;
+import androidx.fragment.app.FragmentActivity;
 
 import com.wowwee.bluetoothrobotcontrollib.rev.REVCommandValues;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot;

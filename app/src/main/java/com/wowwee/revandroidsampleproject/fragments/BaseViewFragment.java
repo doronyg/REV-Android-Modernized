@@ -2,11 +2,11 @@ package com.wowwee.revandroidsampleproject.fragments;
 
 import android.graphics.Rect;
 import android.os.Bundle;
-import android.support.v4.app.Fragment;
-import android.support.v4.app.FragmentActivity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentActivity;
 
 import com.wowwee.bluetoothrobotcontrollib.RobotCommand;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot;

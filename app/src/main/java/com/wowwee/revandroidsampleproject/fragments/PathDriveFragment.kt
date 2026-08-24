@@ -4,13 +4,13 @@ import android.graphics.PointF
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.support.v7.app.AlertDialog
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotConstant
 import com.wowwee.revandroidsampleproject.R

@@ -13,9 +13,9 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import android.support.v4.content.ContextCompat;
 import android.util.AndroidRuntimeException;
 import android.util.Log;
+import androidx.core.content.ContextCompat;
 
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotFinder;

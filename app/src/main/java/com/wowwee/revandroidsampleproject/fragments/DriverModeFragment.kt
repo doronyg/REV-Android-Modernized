@@ -13,7 +13,7 @@ import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
-import android.support.v7.app.AlertDialog
+import androidx.appcompat.app.AlertDialog
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotConstant
 import com.wowwee.revandroidsampleproject.R

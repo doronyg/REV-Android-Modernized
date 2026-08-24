@@ -5,11 +5,13 @@ import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotFinder
 import com.wowwee.revandroidsampleproject.R
 import com.wowwee.revandroidsampleproject.utils.REVPlayer
 
-abstract class ConnectedRevFragment : BaseViewFragment() {
+abstract class ConnectedRevFragment : BaseViewFragment(), KioskLockInterface {
+
+    private var navigationUnlocked = false
 
     protected fun resolveTargetRev(argumentKey: String): REVRobot? {
-        val requestedAddress = arguments?.getString(argumentKey)
-        if (!requestedAddress.isNullOrEmpty()) {
+        val requestedAddress : String? = arguments?.getString(argumentKey)
+        if (requestedAddress != null && requestedAddress != "") {
             for (robot in REVRobotFinder.getInstance().getmRevRobotConnectedList()) {
                 val address = safeAddress(robot)
                 if (requestedAddress.equals(address, ignoreCase = true)) {
@@ -31,6 +33,18 @@ abstract class ConnectedRevFragment : BaseViewFragment() {
         FragmentHelper.switchFragment(activity.supportFragmentManager, ScanFragment(), R.id.view_id_content, false)
     }
 
+    override fun isKioskLockEnabled(): Boolean = true
+
+    override fun onKioskBackPressed(): Boolean {
+        if (!navigationUnlocked) {
+            return true
+        }
+
+        navigationUnlocked = false
+        navigateBackToScan()
+        return true
+    }
+
     private fun safeAddress(robot: REVRobot): String? {
         return try {
             robot.bluetoothDevice?.address
@@ -39,4 +53,3 @@ abstract class ConnectedRevFragment : BaseViewFragment() {
         }
     }
 }
-
