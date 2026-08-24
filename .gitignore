@@ -12,3 +12,14 @@ local.properties
 
 .DS_Store
 captures/
+
+# Logs
+*.log
+
+# Signing keys and cert bundles
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+
