@@ -33,6 +33,7 @@ import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotConstant;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotConstant.revRobotTrackingMode;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotFinder;
+import com.wowwee.revandroidsampleproject.MainActivity;
 import com.wowwee.revandroidsampleproject.R;
 import com.wowwee.revandroidsampleproject.ai.AIPlayer;
 import com.wowwee.revandroidsampleproject.ai.AIPlayerManager;
@@ -43,6 +44,8 @@ import com.wowwee.revandroidsampleproject.fragments.RevAIPlayerFragment.RevAIPla
 import com.wowwee.revandroidsampleproject.fragments.RevConnectAIFragment.REVConnectAIFragmentListener;
 import com.wowwee.revandroidsampleproject.fragments.RevConnectAIFragment.RevConnectAICallback;
 import com.wowwee.revandroidsampleproject.fragments.RevConnectAIFragment.SelectAICar;
+import com.wowwee.revandroidsampleproject.robot.REVRobotEvent;
+import com.wowwee.revandroidsampleproject.robot.REVRobotEventBus;
 import com.wowwee.revandroidsampleproject.utils.BroadcastReceiverUtils;
 import com.wowwee.revandroidsampleproject.utils.JoystickView;
 import com.wowwee.revandroidsampleproject.utils.Player;
@@ -51,6 +54,10 @@ import com.wowwee.revandroidsampleproject.weapon.WeaponManager;
 
 import java.util.List;
 import java.util.Timer;
+
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
+import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 
 @SuppressLint("ValidFragment")
 public class DriveViewFragment extends BaseViewFragment implements OnTouchListener, REVConnectAIFragmentListener, RevConnectAICallback, RevAIPlayerFragmentListener {
@@ -111,6 +118,7 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 
 	private final int DELAY_HALF_SECOND = 500;
 	private final int DELAY_ONE_SECOND = 1000;
+	private final CompositeDisposable revEventDisposables = new CompositeDisposable();
 
 	@Override
 	protected int layoutId() {
@@ -138,6 +146,7 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 	@Override
 	public void onDestroyView() {
 		super.onDestroyView();
+		revEventDisposables.clear();
 		Log.d(TAG, "onDestroyView(): isJoystickTimerRunning=" + isJoystickTimerRunning);
 
 		unregisterReviveReceiver();
@@ -171,6 +180,7 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 	@Override
 	public void onPause() {
 		super.onPause();
+		revEventDisposables.clear();
 		Log.d(TAG, "onPause(): isJoystickTimerRunning=" + isJoystickTimerRunning);
 		if(joystickTimer != null) {
 			joystickTimer.cancel();
@@ -184,6 +194,7 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 	public void onResume() {
 		super.onResume();
 		Log.d(TAG, "onResume()");
+		bindRevEvents();
 
 		rev = REVPlayer.getInstance().getPlayerRev();
 		if (rev == null) {
@@ -403,7 +414,7 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 				revInControl = REVPlayer.getInstance().getPlayerRev();
 				Log.d(TAG, "resumeDriveViewFragment(): revInControl=" + (revInControl != null ? revInControl.getName() : "<null>") + ", connectedCount=" + REVRobotFinder.getInstance().getmRevRobotConnectedList().size());
 				if (revInControl != null)
-					revInControl.setCallbackInterface(DriveViewFragment.this);
+					REVRobotEventBus.attachToRobot(revInControl);
 
 				// By default set all car to Idle
 				for (final REVRobot r : REVRobotFinder.getInstance().getmRevRobotConnectedList()) {
@@ -698,7 +709,7 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 	public void revConnectDidConnectRev(RevConnectAIFragment sender, List<REVRobot> revList) {
 		for(REVRobot revRobot : revList) {
 			Log.d("Connect", "Drive View Connected REV: " + revRobot.getName());
-			revRobot.setCallbackInterface(DriveViewFragment.this);
+			REVRobotEventBus.attachToRobot(revRobot);
 		}
 	}
 
@@ -729,8 +740,7 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 	// REVRobot callback
 	//================================================================================
 
-	@Override
-	public void revDidReceiveIRCommand(final REVRobot rev, final byte irCommand, final byte rxSensor) {
+	private void handleRevDidReceiveIRCommand(final REVRobot rev, final byte irCommand, final byte rxSensor) {
 		getFragmentActivity().runOnUiThread(new Runnable() {
 			@Override
 			public void run() {
@@ -760,16 +770,17 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 		});
 	}
 
-	@Override
-	public void revDeviceReady(REVRobot rev) {
+	private void handleRevDeviceReady(REVRobot rev) {
 		Log.d(TAG, "revDeviceReady(): " + (rev != null ? rev.getName() : "<null>"));
 		// Do this when the REV is connected
 		refreshPlayerCarTrackingMode();
 	}
 
-	@Override
-	public void revDeviceDisconnected(REVRobot rev) {
+	private void handleRevDeviceDisconnected(REVRobot rev) {
 		Log.d(TAG, "revDeviceDisconnected(): " + (rev != null ? rev.getName() : "<null>"));
+		if (getActivity() instanceof MainActivity) {
+			((MainActivity) getActivity()).onPrimaryRevDisconnected();
+		}
 		// Clear connected rev
 		REVRobotFinder.getInstance().clearFoundREVList();
 		FragmentActivity activity = getFragmentActivity();
@@ -783,8 +794,7 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 		}
 	}
 
-	@Override
-	public void revDidReceiveTrackingMode(final REVRobot rev, byte mode) {
+	private void handleRevDidReceiveTrackingMode(final REVRobot rev, byte mode) {
 		if(REVRobotFinder.getInstance().getmRevRobotConnectedList().size() == 1) {
 			if (mode != revRobotTrackingMode.REVTrackingUserControl.getValue()) {
 				handler.postDelayed(new Runnable() {
@@ -841,10 +851,38 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 	@Override
 	public void disconnectAICar(REVRobot aiRev) {
 		AIPlayerManager.getInstance().revDetachAI(aiRev);
-		aiRev.setCallbackInterface(this);
+		REVRobotEventBus.attachToRobot(aiRev);
 		aiRev.disconnect();
 		setViewTouchable(true);
 		resumeDriveViewFragment();
+	}
+
+	private void bindRevEvents() {
+		if (revEventDisposables.size() > 0) {
+			return;
+		}
+
+		revEventDisposables.add(
+				REVRobotEventBus.getEvents()
+						.observeOn(Schedulers.io())
+						.observeOn(AndroidSchedulers.mainThread())
+						.subscribe(
+								event -> {
+									if (event instanceof REVRobotEvent.IrCommandReceived) {
+										REVRobotEvent.IrCommandReceived irEvent = (REVRobotEvent.IrCommandReceived) event;
+										handleRevDidReceiveIRCommand(irEvent.getRobot(), irEvent.getIrCommand(), irEvent.getRxSensor());
+									} else if (event instanceof REVRobotEvent.DeviceReady) {
+										handleRevDeviceReady(((REVRobotEvent.DeviceReady) event).getRobot());
+									} else if (event instanceof REVRobotEvent.DeviceDisconnected) {
+										handleRevDeviceDisconnected(((REVRobotEvent.DeviceDisconnected) event).getRobot());
+									} else if (event instanceof REVRobotEvent.TrackingModeReceived) {
+										REVRobotEvent.TrackingModeReceived modeEvent = (REVRobotEvent.TrackingModeReceived) event;
+										handleRevDidReceiveTrackingMode(modeEvent.getRobot(), modeEvent.getTrackingMode());
+									}
+								},
+								error -> Log.e(TAG, "REV event stream error", error)
+						)
+		);
 	}
 
 	//================================================================================

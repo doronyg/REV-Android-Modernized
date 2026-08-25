@@ -3,10 +3,11 @@ package com.wowwee.revandroidsampleproject;
 import android.content.pm.ActivityInfo;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.WindowManager;
 import android.window.OnBackInvokedCallback;
 import android.window.OnBackInvokedDispatcher;
-import android.util.Log;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
@@ -17,12 +18,20 @@ import com.wowwee.bluetoothrobotcontrollib.BluetoothRobot;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotFinder;
 import com.wowwee.revandroidsampleproject.fragments.KioskLockInterface;
+import com.wowwee.revandroidsampleproject.pvp.GameSessionCoordinator;
+import com.wowwee.revandroidsampleproject.robot.REVRobotEvent;
+import com.wowwee.revandroidsampleproject.robot.REVRobotEventBus;
 import com.wowwee.revandroidsampleproject.utils.KioskLockManager;
 import com.wowwee.revandroidsampleproject.utils.PermissionsFlowHelper;
+
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
+import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 
 public class MainActivity extends FragmentActivity {
 	private static final String TAG = "MainActivity";
 	private final KioskLockManager kioskLockManager = new KioskLockManager();
+	private final CompositeDisposable revEventDisposables = new CompositeDisposable();
 	@Nullable
 	private OnBackInvokedCallback onBackInvokedCallback;
 
@@ -67,12 +76,16 @@ public class MainActivity extends FragmentActivity {
 		for (REVRobot robot : REVRobotFinder.getInstance().getmRevRobotConnectedList()){
 			robot.disconnect();
 		}
+		GameSessionCoordinator.onCarDisconnected();
 	}
 	
 	@Override
 	protected void onResume() {
 		super.onResume();
 		kioskLockManager.onHostResume(this, currentKioskLockTarget());
+		GameSessionCoordinator.onHostResumed();
+		REVRobotEventBus.attachToConnectedRobots();
+		bindRevEventStream();
 		// disable idle timer
 		getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 	}
@@ -80,6 +93,8 @@ public class MainActivity extends FragmentActivity {
 	@Override
 	protected void onPause() {
 		kioskLockManager.onHostPause(this, currentKioskLockTarget());
+		GameSessionCoordinator.onHostPaused();
+		revEventDisposables.clear();
 		super.onPause();
 	}
 
@@ -93,8 +108,50 @@ public class MainActivity extends FragmentActivity {
 		for (REVRobot robot : REVRobotFinder.getInstance().getmRevRobotConnectedList()){
 			robot.disconnect();
 		}
-		
+		GameSessionCoordinator.onCarDisconnected();
+
 		BluetoothRobot.unbindBluetoothLeService(MainActivity.this);
+	}
+
+	public void onPrimaryRevConnected(@Nullable String revId) {
+		if (revId == null || revId.trim().isEmpty()) {
+			return;
+		}
+		REVRobotEventBus.attachToConnectedRobots();
+		GameSessionCoordinator.onCarConnected(revId);
+	}
+
+	public void onSimulatorIdentityConnected(@Nullable String simulatorId) {
+		if (simulatorId == null || simulatorId.trim().isEmpty()) {
+			return;
+		}
+		REVRobotEventBus.attachToConnectedRobots();
+		GameSessionCoordinator.onCarConnected(simulatorId, 8888, true);
+	}
+
+	private void bindRevEventStream() {
+		if (!revEventDisposables.isDisposed() && revEventDisposables.size() > 0) {
+			return;
+		}
+
+		revEventDisposables.add(
+				REVRobotEventBus.getEvents()
+						.observeOn(Schedulers.io())
+						.map(event -> event)
+						.observeOn(AndroidSchedulers.mainThread())
+						.subscribe(
+								event -> {
+									if (event instanceof REVRobotEvent.DeviceDisconnected) {
+										Log.d(TAG, "REV event: device disconnected");
+									}
+								},
+								error -> Log.e(TAG, "REV event stream error", error)
+						)
+		);
+	}
+
+	public void onPrimaryRevDisconnected() {
+		GameSessionCoordinator.onCarDisconnected();
 	}
 
 	private boolean handleBackPress() {

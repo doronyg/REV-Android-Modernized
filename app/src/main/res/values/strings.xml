@@ -49,10 +49,13 @@
     <string name="driver_mode_instructions_got_it">Got it</string>
     <string name="advanced_mode_title">Advanced Wheel Mode</string>
     <string name="advanced_mode_title_format">Advanced Wheel Mode: %1$s</string>
+    <string name="advanced_mode_title_hit_format">%1$s  HP:%2$d  Hits:%3$d</string>
+    <string name="advanced_mode_simulate_hit">Get Hit</string>
     <string name="advanced_mode_instructions_title">Advanced Wheel Controls</string>
     <string name="advanced_mode_instructions_body">Use the left lever for forward/reverse throttle (center line is neutral), and use the center wheel to steer left/right. Tap Fire to shoot.</string>
     <string name="advanced_mode_forward_short">F</string>
     <string name="advanced_mode_backward_short">B</string>
+    <string name="advanced_mode_hit_overlay">HIT!</string>
 
     <string name="path_mode_title">Path Draw Mode</string>
     <string name="path_mode_title_format">Path Draw Mode: %1$s</string>

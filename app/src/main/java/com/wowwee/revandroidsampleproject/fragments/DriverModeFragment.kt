@@ -14,14 +14,12 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
-import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotConstant
 import com.wowwee.revandroidsampleproject.R
 import com.wowwee.revandroidsampleproject.utils.AppPreferences
 import com.wowwee.revandroidsampleproject.utils.DriveCommandSampler
 import com.wowwee.revandroidsampleproject.utils.JoystickView
 import com.wowwee.revandroidsampleproject.utils.Player
-import com.wowwee.revandroidsampleproject.utils.REVPlayer
 
 class DriverModeFragment : ConnectedRevFragment() {
 
@@ -114,14 +112,10 @@ class DriverModeFragment : ConnectedRevFragment() {
 
     override fun onResume() {
         super.onResume()
-        rev = resolveTargetRev(ARG_DEVICE_ADDRESS)
-        if (rev == null && !isSimulatorMode()) {
-            navigateBackToScan()
+        if (!prepareConnectedRev(ARG_DEVICE_ADDRESS)) {
             return
         }
 
-        rev?.setCallbackInterface(this)
-        REVPlayer.getInstance().setPlayerRev(rev)
         switchToDriverMode()
         tvTitle.text = getString(R.string.driver_mode_title_format, displayRevName())
         maybeShowFirstTimeInstructions()
@@ -219,9 +213,6 @@ class DriverModeFragment : ConnectedRevFragment() {
         return true
     }
 
-    override fun revDeviceDisconnected(rev: REVRobot?) {
-        driveHandler.post { navigateBackToScan() }
-    }
 
     private fun sendDriveTick() {
         val robot = rev ?: return

@@ -138,5 +138,38 @@
         android:textColor="?android:textColorPrimaryInverse"
         android:textSize="18sp" />
 
+    <Button
+        android:id="@+id/btnSimulateHit"
+        android:layout_width="120dp"
+        android:layout_height="40dp"
+        android:layout_alignParentStart="true"
+        android:layout_alignParentBottom="true"
+        android:layout_marginStart="16dp"
+        android:layout_marginBottom="16dp"
+        android:background="?attr/colorButtonNormal"
+        android:text="@string/advanced_mode_simulate_hit"
+        android:textAllCaps="false"
+        android:textColor="?android:textColorPrimary"
+        android:visibility="gone" />
+
+    <FrameLayout
+        android:id="@+id/hitSplashOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#66FF3B30"
+        android:clickable="true"
+        android:focusable="true"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:text="@string/advanced_mode_hit_overlay"
+            android:textColor="#FFFFFFFF"
+            android:textSize="48sp"
+            android:textStyle="bold" />
+    </FrameLayout>
+
 </RelativeLayout>
 

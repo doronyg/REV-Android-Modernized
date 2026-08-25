@@ -14,8 +14,8 @@ import com.wowwee.bluetoothrobotcontrollib.rev.REVCommandValues
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotConstant
 import com.wowwee.revandroidsampleproject.R
+import com.wowwee.revandroidsampleproject.robot.REVRobotEvent
 import com.wowwee.revandroidsampleproject.utils.DriveCommandSampler
-import com.wowwee.revandroidsampleproject.utils.REVPlayer
 import kotlin.math.abs
 import kotlin.math.max
 
@@ -97,14 +97,10 @@ class ExperimentsDriveFragment : ConnectedRevFragment() {
 
     override fun onResume() {
         super.onResume()
-        rev = resolveTargetRev(ARG_DEVICE_ADDRESS)
-        if (rev == null && !isSimulatorMode()) {
-            navigateBackToScan()
+        if (!prepareConnectedRev(ARG_DEVICE_ADDRESS)) {
             return
         }
 
-        rev?.setCallbackInterface(this)
-        REVPlayer.getInstance().setPlayerRev(rev)
         rev?.revSetTrackingMode(REVRobotConstant.revRobotTrackingMode.REVTrackingUserControl)
     }
 
@@ -113,11 +109,11 @@ class ExperimentsDriveFragment : ConnectedRevFragment() {
         stopExperiment(true)
     }
 
-    override fun revDeviceDisconnected(rev: REVRobot?) {
-        commandHandler.post {
-            stopExperiment(false)
-            navigateBackToScan()
+    override fun onRevEvent(event: REVRobotEvent) {
+        if (isCurrentRevDisconnected(event)) {
+            commandHandler.post { stopExperiment(false) }
         }
+        super.onRevEvent(event)
     }
 
     private fun setupSliders() {

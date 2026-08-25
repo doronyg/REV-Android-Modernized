@@ -11,13 +11,12 @@ import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
-import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotConstant
 import com.wowwee.revandroidsampleproject.R
+import com.wowwee.revandroidsampleproject.robot.REVRobotEvent
 import com.wowwee.revandroidsampleproject.utils.AppPreferences
 import com.wowwee.revandroidsampleproject.utils.DriveCommandSampler
 import com.wowwee.revandroidsampleproject.utils.PathDrawingView
-import com.wowwee.revandroidsampleproject.utils.REVPlayer
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.ceil
@@ -119,14 +118,10 @@ class PathDriveFragment : ConnectedRevFragment() {
 
     override fun onResume() {
         super.onResume()
-        rev = resolveTargetRev(ARG_DEVICE_ADDRESS)
-        if (rev == null && !isSimulatorMode()) {
-            navigateBackToScan()
+        if (!prepareConnectedRev(ARG_DEVICE_ADDRESS)) {
             return
         }
 
-        rev?.setCallbackInterface(this)
-        REVPlayer.getInstance().setPlayerRev(rev)
         rev?.revSetTrackingMode(REVRobotConstant.revRobotTrackingMode.REVTrackingUserControl)
 
         maybeShowFirstTimeInstructions()
@@ -139,11 +134,11 @@ class PathDriveFragment : ConnectedRevFragment() {
         stopRun()
     }
 
-    override fun revDeviceDisconnected(rev: REVRobot?) {
-        runHandler.post {
-            stopRun()
-            navigateBackToScan()
+    override fun onRevEvent(event: REVRobotEvent) {
+        if (isCurrentRevDisconnected(event)) {
+            runHandler.post { stopRun() }
         }
+        super.onRevEvent(event)
     }
 
     private fun maybeShowFirstTimeInstructions() {

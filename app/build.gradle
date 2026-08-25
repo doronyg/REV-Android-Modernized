@@ -34,6 +34,12 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation platform('org.jetbrains.kotlin:kotlin-bom:1.9.24')
     implementation 'org.jetbrains.kotlin:kotlin-stdlib'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
     implementation 'com.google.code.gson:gson:2.14.0'
+    implementation 'io.reactivex.rxjava3:rxjava:3.1.12'
+    implementation 'io.reactivex.rxjava3:rxandroid:3.0.2'
     implementation project(':bluetoothrobotcontrollib_src')
+
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.jetbrains.kotlin:kotlin-test-junit:1.9.24'
 }

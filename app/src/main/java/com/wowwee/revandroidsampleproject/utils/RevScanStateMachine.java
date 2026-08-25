@@ -15,17 +15,18 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.AndroidRuntimeException;
 import android.util.Log;
+
 import androidx.core.content.ContextCompat;
 
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotFinder;
 import com.wowwee.bluetoothrobotcontrollib.util.AdRecord;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.lang.ref.WeakReference;
 
 public class RevScanStateMachine {
 

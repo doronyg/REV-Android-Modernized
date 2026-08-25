@@ -3,11 +3,17 @@ package com.wowwee.revandroidsampleproject.fragments
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotFinder
 import com.wowwee.revandroidsampleproject.R
+import com.wowwee.revandroidsampleproject.robot.REVRobotEvent
+import com.wowwee.revandroidsampleproject.robot.REVRobotEventBus
 import com.wowwee.revandroidsampleproject.utils.REVPlayer
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
+import io.reactivex.rxjava3.disposables.CompositeDisposable
+import io.reactivex.rxjava3.schedulers.Schedulers
 
 abstract class ConnectedRevFragment : BaseViewFragment(), KioskLockInterface {
 
     private var navigationUnlocked = false
+    private val revEventDisposables = CompositeDisposable()
 
     protected fun resolveTargetRev(argumentKey: String): REVRobot? {
         val requestedAddress : String? = arguments?.getString(argumentKey)
@@ -39,6 +45,42 @@ abstract class ConnectedRevFragment : BaseViewFragment(), KioskLockInterface {
         FragmentHelper.switchFragment(activity.supportFragmentManager, ScanFragment(), R.id.view_id_content, false)
     }
 
+    protected fun attachRevEventSource(robot: REVRobot?) {
+        REVRobotEventBus.attachToRobot(robot)
+    }
+
+    protected fun prepareConnectedRev(argumentKey: String): Boolean {
+        rev = resolveTargetRev(argumentKey)
+        if (rev == null && !isSimulatorMode()) {
+            navigateBackToScan()
+            return false
+        }
+
+        attachRevEventSource(rev)
+        REVPlayer.getInstance().setPlayerRev(rev)
+        return true
+    }
+
+    override fun onResume() {
+        super.onResume()
+        bindRevEventsIfNeeded()
+    }
+
+    override fun onPause() {
+        revEventDisposables.clear()
+        super.onPause()
+    }
+
+    protected open fun onRevEvent(event: REVRobotEvent) {
+        if (isCurrentRevDisconnected(event)) {
+            navigateBackToScan()
+        }
+    }
+
+    protected fun isCurrentRevDisconnected(event: REVRobotEvent): Boolean {
+        return event is REVRobotEvent.DeviceDisconnected && event.robot == rev
+    }
+
     override fun isKioskLockEnabled(): Boolean = true
 
     override fun onKioskBackPressed(): Boolean {
@@ -49,6 +91,20 @@ abstract class ConnectedRevFragment : BaseViewFragment(), KioskLockInterface {
         navigationUnlocked = false
         navigateBackToScan()
         return true
+    }
+
+    private fun bindRevEventsIfNeeded() {
+        if (revEventDisposables.size() > 0) return
+
+        revEventDisposables.add(
+            REVRobotEventBus.events
+                .observeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe({ event ->
+                    onRevEvent(event)
+                }, {
+                })
+        )
     }
 
     private fun safeAddress(robot: REVRobot): String? {

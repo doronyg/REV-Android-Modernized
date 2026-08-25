@@ -5,18 +5,17 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Handler;
 import android.os.Looper;
+
+import androidx.annotation.Nullable;
 import androidx.fragment.app.FragmentActivity;
 
 import com.wowwee.bluetoothrobotcontrollib.rev.REVCommandValues;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotConstant;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotConstant.revRobotTrackingMode;
-import com.wowwee.bluetoothrobotcontrollib.rev.util.GunShotData;
 import com.wowwee.revandroidsampleproject.R;
-import com.wowwee.revandroidsampleproject.ai.AIAssistant;
 import com.wowwee.revandroidsampleproject.ai.AIPlayer;
 import com.wowwee.revandroidsampleproject.fragments.DriveViewFragment;
-import com.wowwee.revandroidsampleproject.weapon.WeaponManager;
 
 /**
  * Created by yinlau on 28/1/16.
@@ -74,7 +73,7 @@ public class Player {
         }
     }
 
-    public float getShot(REVRobot rev, byte irCommand, FragmentActivity activity) {
+    public float getShot(@Nullable REVRobot rev, byte irCommand, FragmentActivity activity) {
         float health = 0;
         if (rev != null) {
             health = rev.health;
@@ -85,29 +84,6 @@ public class Player {
             flashLed(rev, LED_COLOR_RED);
             // Reset led to blue light
             setLed(rev, LED_COLOR_BLUE);
-            // Find enemy's gun data
-            GunShotData refGunShotData = WeaponManager.getInstance().getGunShotData(irCommand);
-            if (refGunShotData != null) {
-                GunShotData gunShotData = new GunShotData(refGunShotData);
-
-                // Deduct health
-                float deductHealthValue = gunShotData.getDamageLevel() * 1.0f;
-                float remainHealthValue = Math.min(Math.max(rev.health - deductHealthValue, 0), 1);
-                rev.setHealth(remainHealthValue);
-                health = remainHealthValue;
-
-                if(rev.health <= 0) {
-                    // Set dead status
-                    rev.setIsDead(true);
-                    // Popup revive dialog
-                    doLose(rev, activity);
-                }
-
-                if(rev == AIPlayer.getRev() && rev.health > 0) {
-                    // AI got shot may change the tracking mode
-                    AIAssistant.getInstance().aiGotShot(remainHealthValue);
-                }
-            }
         }
         return health;
     }
@@ -202,17 +178,7 @@ public class Player {
     }
 
     public void aiShot() {
-        if(AIAssistant.getInstance().isAiGaming() && AIPlayer.getRev() != null && AIPlayer.getRev().health > 0) {
-            handler.postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    // 0 means AI is using Gun A
-                    gunFire(AIPlayer.getRev(), 0);
-                    // AI fire repeatedly
-                    aiShot();
-                }
-            }, DELAY_HALF_SECOND);
-        }
+        // AI combat loop is disabled in simplified mode.
     }
 
     public void aiChangeMode(revRobotTrackingMode mode){
@@ -222,12 +188,7 @@ public class Player {
     }
 
     public void setAiEnable(boolean aiEnable){
-        if (aiEnable) {
-            AIAssistant.getInstance().startAI();
-            aiShot();
-        }else{
-            AIAssistant.getInstance().stopAI();
-        }
+        // AI system is intentionally disabled; keep method for compatibility with existing calls.
     }
 
 }

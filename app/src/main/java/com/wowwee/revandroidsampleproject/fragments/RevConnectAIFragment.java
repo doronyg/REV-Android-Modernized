@@ -21,6 +21,8 @@ import com.wowwee.revandroidsampleproject.ai.AIPlayer;
 import com.wowwee.revandroidsampleproject.ai.AIPlayerManager;
 import com.wowwee.revandroidsampleproject.fragments.RevAIPlayerFragment.RevAIPlayerFragmentListener;
 import com.wowwee.revandroidsampleproject.fragments.RevAIPlayerFragment.SelectedCarListener;
+import com.wowwee.revandroidsampleproject.robot.REVRobotEvent;
+import com.wowwee.revandroidsampleproject.robot.REVRobotEventBus;
 import com.wowwee.revandroidsampleproject.utils.AICarListAdapter;
 import com.wowwee.revandroidsampleproject.utils.BroadcastReceiverUtils;
 import com.wowwee.revandroidsampleproject.utils.REVPlayer;
@@ -29,6 +31,10 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
+
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
+import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 
 public class RevConnectAIFragment extends BaseViewFragment implements RevAIPlayerFragmentListener, SelectedCarListener{
 
@@ -50,6 +56,7 @@ public class RevConnectAIFragment extends BaseViewFragment implements RevAIPlaye
 	private Runnable connectAIRunnable;
 	private int retryTime;
 	private boolean isRevFinderReceiverRegistered = false;
+	private final CompositeDisposable revEventDisposables = new CompositeDisposable();
 
 	public enum ConnectAIMode {BATTLE_MODE, CAMPAIGN_MODE};
 	public ConnectAIMode connectAIMode = ConnectAIMode.BATTLE_MODE;
@@ -208,7 +215,7 @@ public class RevConnectAIFragment extends BaseViewFragment implements RevAIPlaye
 		// Detach AI car
 		REVRobot aiRev = AIPlayer.getRev();
 		AIPlayerManager.getInstance().revDetachAI(aiRev);
-		aiRev.setCallbackInterface(RevConnectAIFragment.this);
+		REVRobotEventBus.attachToRobot(aiRev);
 		aiRev.disconnect();
 		// Update button layout
 		connectBtn.setVisibility(View.VISIBLE);
@@ -222,7 +229,7 @@ public class RevConnectAIFragment extends BaseViewFragment implements RevAIPlaye
 					@Override
 					public void run() {
 						REVRobot revToConnect = car.getRevRobot();
-						revToConnect.setCallbackInterface(RevConnectAIFragment.this);
+						REVRobotEventBus.attachToRobot(revToConnect);
 						revToConnect.connect();
 					}
 				});
@@ -246,8 +253,7 @@ public class RevConnectAIFragment extends BaseViewFragment implements RevAIPlaye
     // REVRobot callback
     //================================================================================
 	
-	@Override
-	public void revDeviceReady(REVRobot rev) {
+	private void handleRevDeviceReady(REVRobot rev) {
 		connectedRevList.add(rev);
 		final REVRobot robot = rev;
 		numOfSelectedCars--;
@@ -336,6 +342,7 @@ public class RevConnectAIFragment extends BaseViewFragment implements RevAIPlaye
 	@Override
 	public void onResume() {
 		super.onResume();
+		bindRevEvents();
 		isRevFinderReceiverRegistered = BroadcastReceiverUtils.registerReceiver(
 				getFragmentActivity(),
 				mRevFinderBroadcastReceiver,
@@ -371,6 +378,7 @@ public class RevConnectAIFragment extends BaseViewFragment implements RevAIPlaye
 	@Override
 	public void onPause() {
 		super.onPause();
+		revEventDisposables.clear();
 
 		// Stop scan for ai cars
 		REVRobotFinder.getInstance().stopScanForREV();
@@ -384,7 +392,28 @@ public class RevConnectAIFragment extends BaseViewFragment implements RevAIPlaye
 		);
 		isRevFinderReceiverRegistered = false;
 	}
-	
+
+	private void bindRevEvents() {
+		if (revEventDisposables.size() > 0) {
+			return;
+		}
+
+		revEventDisposables.add(
+				REVRobotEventBus.getEvents()
+						.observeOn(Schedulers.io())
+						.observeOn(AndroidSchedulers.mainThread())
+						.subscribe(
+								event -> {
+									if (event instanceof REVRobotEvent.DeviceReady) {
+										handleRevDeviceReady(((REVRobotEvent.DeviceReady) event).getRobot());
+									}
+								},
+								error -> {
+								}
+						)
+		);
+	}
+
 	public static class SelectAICar{
 
 		REVRobot revRobot;

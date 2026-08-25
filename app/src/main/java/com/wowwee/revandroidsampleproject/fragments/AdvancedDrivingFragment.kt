@@ -1,30 +1,37 @@
 package com.wowwee.revandroidsampleproject.fragments
 
-import android.annotation.SuppressLint
 import android.animation.ValueAnimator
+import android.annotation.SuppressLint
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.view.animation.AccelerateDecelerateInterpolator
+import android.os.SystemClock
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
+import com.wowwee.bluetoothrobotcontrollib.RobotCommand
+import com.wowwee.bluetoothrobotcontrollib.rev.REVCommandValues.kRevSendIRCommand
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotConstant
 import com.wowwee.revandroidsampleproject.R
+import com.wowwee.revandroidsampleproject.pvp.GameSessionCoordinator
+import com.wowwee.revandroidsampleproject.robot.REVRobotEvent
 import com.wowwee.revandroidsampleproject.utils.AppPreferences
 import com.wowwee.revandroidsampleproject.utils.DriveCommandSampler
+import com.wowwee.revandroidsampleproject.utils.HapticUtils
 import com.wowwee.revandroidsampleproject.utils.JoystickView
 import com.wowwee.revandroidsampleproject.utils.Player
-import com.wowwee.revandroidsampleproject.utils.REVPlayer
-import android.os.SystemClock
+import kotlin.math.sin
 import kotlin.math.sqrt
+
+
 
 class AdvancedDrivingFragment : ConnectedRevFragment() {
 
@@ -36,6 +43,11 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         private const val MAX_WHEEL_ROTATION_DEG = 75f
         private const val MAX_WHEEL_ROTATION_SPEED_DEG_PER_SEC = 900f
         private const val CENTER_RETURN_ANIM_MS = 170L
+        private const val HIT_STUN_MS = 3000L
+        private const val HIT_SHAKE_MS = 420L
+        private const val HIT_VIBRATION_DURATION = 220L
+        private const val DEFAULT_HIT_DAMAGE = 1
+        private const val UNKNOWN_ATTACKER_ID = "UNKNOWN"
 
         @JvmStatic
         fun newInstance(deviceAddress: String?): AdvancedDrivingFragment {
@@ -56,7 +68,9 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
     private lateinit var btnFire: Button
     private lateinit var btnMode: Button
     private lateinit var btnDriverHelp: Button
+    private lateinit var btnSimulateHit: Button
     private lateinit var tvTitle: TextView
+    private lateinit var hitSplashOverlay: View
 
     private var wheelPointerId: Int = MotionEvent.INVALID_POINTER_ID
     private var leverPointerId: Int = MotionEvent.INVALID_POINTER_ID
@@ -64,11 +78,14 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
     private var lastWheelRotationUpdateMs = 0L
     private var wheelCenterAnimator: ValueAnimator? = null
     private var leverCenterAnimator: ValueAnimator? = null
+    private var hitStunUntilMs: Long = 0L
+    private var hitCount: Int = 0
 
     private val movementVector = floatArrayOf(0f, 0f)
     private val sendVector = floatArrayOf(0f, 0f)
 
     private val driveHandler = Handler(Looper.getMainLooper())
+    private val clearHitStunRunnable = Runnable { clearHitStun() }
     private val driveLoopRunnable = object : Runnable {
         override fun run() {
             sendDriveTick()
@@ -95,7 +112,9 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         btnFire = view.findViewById(R.id.btnFire)
         btnMode = view.findViewById(R.id.btnMode)
         btnDriverHelp = view.findViewById(R.id.btnDriverHelp)
+        btnSimulateHit = view.findViewById(R.id.btnSimulateHit)
         tvTitle = view.findViewById(R.id.tvDriverModeTitle)
+        hitSplashOverlay = view.findViewById(R.id.hitSplashOverlay)
 
         wheelControl.updateRightView()
         wheelControl.visibility = View.VISIBLE
@@ -128,22 +147,22 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         btnDriverHelp.setOnClickListener {
             showDriverInstructions()
         }
+        btnSimulateHit.setOnClickListener {
+            triggerSimulatedHit()
+        }
 
         return view
     }
 
     override fun onResume() {
         super.onResume()
-        rev = resolveTargetRev(ARG_DEVICE_ADDRESS)
-        if (rev == null && !isSimulatorMode()) {
-            navigateBackToScan()
+        if (!prepareConnectedRev(ARG_DEVICE_ADDRESS)) {
             return
         }
 
-        rev?.setCallbackInterface(this)
-        REVPlayer.getInstance().setPlayerRev(rev)
         switchToDriverMode()
         tvTitle.text = getString(R.string.advanced_mode_title_format, displayRevName())
+        btnSimulateHit.visibility = if (isSimulatorMode()) View.VISIBLE else View.GONE
         maybeShowFirstTimeInstructions()
 
         driveHandler.removeCallbacks(driveLoopRunnable)
@@ -184,6 +203,7 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
 
     override fun onPause() {
         super.onPause()
+        driveHandler.removeCallbacks(clearHitStunRunnable)
         driveHandler.removeCallbacks(driveLoopRunnable)
         movementVector[0] = 0f
         movementVector[1] = 0f
@@ -245,11 +265,10 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         return true
     }
 
-    override fun revDeviceDisconnected(rev: REVRobot?) {
-        driveHandler.post { navigateBackToScan() }
-    }
-
     private fun sendDriveTick() {
+        if (isHitStunned()) {
+            return
+        }
         val robot = rev ?: return
         if (robot.isDead) {
             return
@@ -274,6 +293,9 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
     }
 
     private fun sendDriveVector(x: Float, y: Float) {
+        if (isHitStunned()) {
+            return
+        }
         val robot = rev ?: return
         sendVector[0] = x
         sendVector[1] = y
@@ -425,6 +447,109 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
             }
             start()
         }
+    }
+
+    override fun onRevEvent(event: REVRobotEvent) {
+        when {
+            event is REVRobotEvent.RobotCommandProcessed -> {
+                val dataArray = event.command.dataArray
+                if (event.command.cmdByte == kRevSendIRCommand && dataArray.size >= 2) {
+                    handleRevDidReceiveIRCommand(event.robot, dataArray[0], dataArray[1])
+                }
+            }
+            else -> super.onRevEvent(event)
+        }
+    }
+
+    private fun handleRevDidReceiveIRCommand(robot: REVRobot?, irCommand: Byte, rxSensor: Byte) {
+        DriveCommandSampler.logDrive(
+            source = "advanced.hit",
+            x = 0f,
+            y = 0f,
+            note = "irCommand=${irCommand.toInt()} rxSensor=${rxSensor.toInt()}"
+        )
+
+
+        val remainHealthValue = Player.getInstance().getShot(robot, irCommand, activity)
+        GameSessionCoordinator.registerHitTaken(UNKNOWN_ATTACKER_ID, DEFAULT_HIT_DAMAGE)
+        hitCount += 1
+
+        tvTitle.text = getString(
+            R.string.advanced_mode_title_hit_format,
+            displayRevName(),
+            (remainHealthValue * 100f).toInt(),
+            hitCount
+        )
+
+        startHitStun()
+    }
+
+    private fun triggerSimulatedHit() {
+        // Simulate the same incoming callback event path used by real hardware.
+//        val robot = rev ?: return
+        onRevEvent(REVRobotEvent.RobotCommandProcessed(robot = null, RobotCommand(kRevSendIRCommand, ArrayList<Byte>(byteArrayOf(0.toByte(), 3.toByte()).toList()))))
+    }
+
+    private fun startHitStun() {
+        hitStunUntilMs = SystemClock.uptimeMillis() + HIT_STUN_MS
+        driveHandler.removeCallbacks(clearHitStunRunnable)
+        driveHandler.postDelayed(clearHitStunRunnable, HIT_STUN_MS)
+
+        movementVector[0] = 0f
+        movementVector[1] = 0f
+        rev?.revStop()
+
+        enableDrive(false)
+
+        playHitSplashAnimation()
+        vibrateOnHit()
+    }
+
+    private fun clearHitStun() {
+        hitStunUntilMs = 0L
+        enableDrive(true)
+        hitSplashOverlay.visibility = View.GONE
+        hitSplashOverlay.alpha = 0f
+        tvTitle.text = getString(R.string.advanced_mode_title_format, displayRevName())
+    }
+
+    private fun enableDrive(enabled: Boolean) {
+        touchArea.isEnabled = enabled
+        btnFire.isEnabled = enabled
+        btnMode.isEnabled = enabled
+        btnDriverHelp.isEnabled = enabled
+    }
+
+    private fun isHitStunned(): Boolean {
+        return SystemClock.uptimeMillis() < hitStunUntilMs
+    }
+
+    private fun playHitSplashAnimation() {
+        hitSplashOverlay.visibility = View.VISIBLE
+        hitSplashOverlay.alpha = 1f
+
+        val shakeTargets = listOf(wheelControl, leverControl, btnFire, btnMode, btnDriverHelp)
+        val amplitudePx = 18f
+        ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = HIT_SHAKE_MS
+            addUpdateListener { animator ->
+                val phase = (animator.animatedFraction * 8f * Math.PI).toFloat()
+                val offset = sin(phase) * amplitudePx
+                shakeTargets.forEach { target ->
+                    target.translationX = offset
+                }
+            }
+            start()
+        }
+
+        hitSplashOverlay.animate()
+            .alpha(0.35f)
+            .setDuration(HIT_STUN_MS)
+            .start()
+    }
+
+    private fun vibrateOnHit() {
+        HapticUtils.vibrate(context, HIT_VIBRATION_DURATION)
     }
 }
 
