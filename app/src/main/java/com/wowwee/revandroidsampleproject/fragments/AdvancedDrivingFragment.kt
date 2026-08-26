@@ -2,6 +2,7 @@ package com.wowwee.revandroidsampleproject.fragments
 
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
+import android.graphics.drawable.LayerDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -14,7 +15,6 @@ import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import com.wowwee.bluetoothrobotcontrollib.RobotCommand
 import com.wowwee.bluetoothrobotcontrollib.rev.REVCommandValues.kRevSendIRCommand
@@ -44,10 +44,12 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         private const val MAX_WHEEL_ROTATION_SPEED_DEG_PER_SEC = 900f
         private const val CENTER_RETURN_ANIM_MS = 170L
         private const val HIT_STUN_MS = 3000L
+        private const val FIRE_RELOAD_MS = 5000L
         private const val HIT_SHAKE_MS = 420L
         private const val HIT_VIBRATION_DURATION = 220L
         private const val DEFAULT_HIT_DAMAGE = 1
         private const val UNKNOWN_ATTACKER_ID = "UNKNOWN"
+        private const val DRAWABLE_LEVEL_MAX = 10000
 
         @JvmStatic
         fun newInstance(deviceAddress: String?): AdvancedDrivingFragment {
@@ -67,7 +69,6 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
     private lateinit var leverThumb: ImageView
     private lateinit var btnFire: Button
     private lateinit var btnMode: Button
-    private lateinit var btnDriverHelp: Button
     private lateinit var btnSimulateHit: Button
     private lateinit var tvTitle: TextView
     private lateinit var hitSplashOverlay: View
@@ -78,14 +79,18 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
     private var lastWheelRotationUpdateMs = 0L
     private var wheelCenterAnimator: ValueAnimator? = null
     private var leverCenterAnimator: ValueAnimator? = null
+    private var fireCooldownAnimator: ValueAnimator? = null
     private var hitStunUntilMs: Long = 0L
+    private var fireCooldownUntilMs: Long = 0L
     private var hitCount: Int = 0
+    private var fireButtonLayers: LayerDrawable? = null
 
     private val movementVector = floatArrayOf(0f, 0f)
     private val sendVector = floatArrayOf(0f, 0f)
 
     private val driveHandler = Handler(Looper.getMainLooper())
     private val clearHitStunRunnable = Runnable { clearHitStun() }
+    private val clearFireCooldownRunnable = Runnable { clearFireCooldown() }
     private val driveLoopRunnable = object : Runnable {
         override fun run() {
             sendDriveTick()
@@ -111,10 +116,12 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         leverThumb = view.findViewById(R.id.joystickL)
         btnFire = view.findViewById(R.id.btnFire)
         btnMode = view.findViewById(R.id.btnMode)
-        btnDriverHelp = view.findViewById(R.id.btnDriverHelp)
         btnSimulateHit = view.findViewById(R.id.btnSimulateHit)
         tvTitle = view.findViewById(R.id.tvDriverModeTitle)
         hitSplashOverlay = view.findViewById(R.id.hitSplashOverlay)
+
+        fireButtonLayers = (btnFire.background as? LayerDrawable)
+        updateFireButtonReloadVisual(1f, active = true)
 
         wheelControl.updateRightView()
         wheelControl.visibility = View.VISIBLE
@@ -133,19 +140,16 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
 
         touchArea.setOnTouchListener(driveTouchListener)
         btnFire.setOnClickListener {
+            if (isFireCooldownActive()) {
+                return@setOnClickListener
+            }
             rev?.let { robot ->
                 Player.getInstance().gunFire(robot, 0)
             }
+            startFireCooldown()
         }
         btnMode.setOnClickListener {
-            Toast.makeText(requireContext(), R.string.driver_mode_switch_hint, Toast.LENGTH_SHORT).show()
-        }
-        btnMode.setOnLongClickListener {
-            showModeSelectionDialog()
-            true
-        }
-        btnDriverHelp.setOnClickListener {
-            showDriverInstructions()
+            showModeMenu()
         }
         btnSimulateHit.setOnClickListener {
             triggerSimulatedHit()
@@ -193,18 +197,36 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         sendDriveVector(0f, 0f)
     }
 
-    private fun showModeSelectionDialog() {
-        DrivingModeSwitch.showModeSelectionDialog(
-            host = this,
-            currentMode = DrivingModeOption.ADVANCED,
-            deviceAddress = currentDeviceAddress(ARG_DEVICE_ADDRESS)
-        )
+    private fun showModeMenu() {
+        val context = context ?: return
+        val deviceAddress = currentDeviceAddress(ARG_DEVICE_ADDRESS)
+        val modeOptions = DrivingModeSwitch.modeOptionsExcluding(DrivingModeOption.ADVANCED)
+        val labels = mutableListOf(getString(R.string.driver_mode_help))
+        labels.addAll(DrivingModeSwitch.modeLabels(context, modeOptions))
+
+        AlertDialog.Builder(context)
+            .setTitle(R.string.driver_mode_switch_title)
+            .setItems(labels.toTypedArray()) { _, which ->
+                if (which == 0) {
+                    showDriverInstructions()
+                    return@setItems
+                }
+
+                val selectedMode = modeOptions.getOrNull(which - 1) ?: return@setItems
+                DrivingModeSwitch.switchToMode(this, selectedMode, deviceAddress)
+            }
+            .show()
     }
 
     override fun onPause() {
         super.onPause()
         driveHandler.removeCallbacks(clearHitStunRunnable)
+        driveHandler.removeCallbacks(clearFireCooldownRunnable)
         driveHandler.removeCallbacks(driveLoopRunnable)
+        fireCooldownAnimator?.cancel()
+        fireCooldownAnimator = null
+        fireCooldownUntilMs = 0L
+        updateFireButtonReloadVisual(1f, active = true)
         movementVector[0] = 0f
         movementVector[1] = 0f
         releaseWheelControl()
@@ -486,7 +508,6 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
 
     private fun triggerSimulatedHit() {
         // Simulate the same incoming callback event path used by real hardware.
-//        val robot = rev ?: return
         onRevEvent(REVRobotEvent.RobotCommandProcessed(robot = null, RobotCommand(kRevSendIRCommand, ArrayList<Byte>(byteArrayOf(0.toByte(), 3.toByte()).toList()))))
     }
 
@@ -515,9 +536,57 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
 
     private fun enableDrive(enabled: Boolean) {
         touchArea.isEnabled = enabled
-        btnFire.isEnabled = enabled
+        btnFire.isEnabled = enabled && !isFireCooldownActive()
         btnMode.isEnabled = enabled
-        btnDriverHelp.isEnabled = enabled
+    }
+
+    private fun startFireCooldown() {
+        fireCooldownUntilMs = SystemClock.uptimeMillis() + FIRE_RELOAD_MS
+
+        driveHandler.removeCallbacks(clearFireCooldownRunnable)
+        driveHandler.postDelayed(clearFireCooldownRunnable, FIRE_RELOAD_MS)
+
+        fireCooldownAnimator?.cancel()
+        btnFire.isEnabled = false
+        updateFireButtonReloadVisual(0f, active = false)
+
+        fireCooldownAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = FIRE_RELOAD_MS
+            interpolator = AccelerateDecelerateInterpolator()
+            addUpdateListener { animator ->
+                updateFireButtonReloadVisual(animator.animatedValue as Float, active = false)
+            }
+            start()
+        }
+    }
+
+    private fun clearFireCooldown() {
+        fireCooldownUntilMs = 0L
+        fireCooldownAnimator?.cancel()
+        fireCooldownAnimator = null
+        btnFire.isEnabled = !isHitStunned()
+        updateFireButtonReloadVisual(1f, active = true)
+    }
+
+    private fun isFireCooldownActive(): Boolean {
+        return SystemClock.uptimeMillis() < fireCooldownUntilMs
+    }
+
+    private fun updateFireButtonReloadVisual(progress: Float, active: Boolean) {
+        val safeProgress = progress.coerceIn(0f, 1f)
+        val level = (safeProgress * DRAWABLE_LEVEL_MAX).toInt().coerceIn(0, DRAWABLE_LEVEL_MAX)
+        fireButtonLayers?.findDrawableByLayerId(R.id.fire_fill_layer)?.level = level
+
+        if (active) {
+            btnFire.text = getString(R.string.fire)
+            btnFire.alpha = 1f
+            return
+        }
+
+        val remainingMs = (fireCooldownUntilMs - SystemClock.uptimeMillis()).coerceAtLeast(0L)
+        val remainingSeconds = ((remainingMs + 999L) / 1000L).toInt()
+        btnFire.text = getString(R.string.fire_reloading_seconds, remainingSeconds)
+        btnFire.alpha = 0.95f
     }
 
     private fun isHitStunned(): Boolean {
@@ -528,7 +597,7 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         hitSplashOverlay.visibility = View.VISIBLE
         hitSplashOverlay.alpha = 1f
 
-        val shakeTargets = listOf(wheelControl, leverControl, btnFire, btnMode, btnDriverHelp)
+        val shakeTargets = listOf(wheelControl, leverControl, btnFire, btnMode)
         val amplitudePx = 18f
         ValueAnimator.ofFloat(0f, 1f).apply {
             duration = HIT_SHAKE_MS

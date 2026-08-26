@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@android:id/background">
+        <shape android:shape="rectangle">
+            <corners android:radius="18dp" />
+            <gradient
+                android:angle="270"
+                android:startColor="#F6DF6C"
+                android:endColor="#C5A133" />
+        </shape>
+    </item>
+
+    <item
+        android:top="2dp"
+        android:bottom="2dp"
+        android:left="2dp"
+        android:right="2dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="16dp" />
+            <gradient
+                android:angle="270"
+                android:startColor="#04112D"
+                android:centerColor="#0D3A84"
+                android:endColor="#0B5864" />
+        </shape>
+    </item>
+
+    <item
+        android:id="@+id/fire_fill_layer"
+        android:gravity="start"
+        android:drawable="@drawable/advanced_fire_button_fill_clip" />
+
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="18dp" />
+            <gradient
+                android:angle="90"
+                android:startColor="#22FFFFFF"
+                android:centerColor="#44D7FF86"
+                android:endColor="#22FFFFFF"
+                android:type="linear" />
+        </shape>
+    </item>
+</layer-list>
+
+
+

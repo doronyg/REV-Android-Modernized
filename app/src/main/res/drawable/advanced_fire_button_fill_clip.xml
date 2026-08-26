@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<clip xmlns:android="http://schemas.android.com/apk/res/android"
+    android:clipOrientation="horizontal"
+    android:gravity="start">
+
+    <shape android:shape="rectangle">
+        <corners android:radius="18dp" />
+        <gradient
+            android:angle="0"
+            android:startColor="#08225B"
+            android:centerColor="#1B4FB0"
+            android:endColor="#2E8D78" />
+    </shape>
+</clip>
+
+

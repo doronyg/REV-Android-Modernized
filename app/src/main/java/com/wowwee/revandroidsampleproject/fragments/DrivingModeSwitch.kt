@@ -13,6 +13,14 @@ enum class DrivingModeOption(val labelResId: Int) {
 
 object DrivingModeSwitch {
 
+    fun modeOptionsExcluding(currentMode: DrivingModeOption): List<DrivingModeOption> {
+        return DrivingModeOption.entries.filter { it != currentMode }
+    }
+
+    fun modeLabels(context: android.content.Context, options: List<DrivingModeOption>): Array<String> {
+        return options.map { context.getString(it.labelResId) }.toTypedArray()
+    }
+
     fun showModeSelectionDialog(
         host: ConnectedRevFragment,
         currentMode: DrivingModeOption,
@@ -21,8 +29,8 @@ object DrivingModeSwitch {
         val context = host.context ?: return
         val activity = host.activity ?: return
 
-        val options = DrivingModeOption.entries.filter { it != currentMode }
-        val labels = options.map { context.getString(it.labelResId) }.toTypedArray()
+        val options = modeOptionsExcluding(currentMode)
+        val labels = modeLabels(context, options)
 
         androidx.appcompat.app.AlertDialog.Builder(context)
             .setTitle(R.string.driver_mode_switch_title)
@@ -31,6 +39,11 @@ object DrivingModeSwitch {
                 navigateToMode(activity, selectedMode, deviceAddress)
             }
             .show()
+    }
+
+    fun switchToMode(host: ConnectedRevFragment, mode: DrivingModeOption, deviceAddress: String?) {
+        val activity = host.activity ?: return
+        navigateToMode(activity, mode, deviceAddress)
     }
 
     private fun navigateToMode(activity: FragmentActivity, mode: DrivingModeOption, deviceAddress: String?) {
