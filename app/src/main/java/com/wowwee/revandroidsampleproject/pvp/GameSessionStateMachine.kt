@@ -18,6 +18,11 @@ import kotlin.math.max
  * Transport concerns stay inside UdpGameEngine.
  */
 class GameSessionStateMachine {
+    companion object {
+        // Temporary override: process incoming gameplay packets even when no active session exists.
+        private const val ALLOW_MESSAGES_WITHOUT_SESSION_OVERRIDE = true
+    }
+
     private val stateLock = Any()
     private val hitHistory = ArrayDeque<HitRecord>()
     private val networkDisposables = CompositeDisposable()
@@ -44,7 +49,7 @@ class GameSessionStateMachine {
     private var hostId: String? = null
 
     @Volatile
-    private var sessionActive: Boolean = false
+    private var sessionActive: Boolean = true
 
     fun bindLocalIdentity(playerId: String) {
         localId = playerId.trim()
@@ -222,10 +227,17 @@ class GameSessionStateMachine {
             GameEventType.HEARTBEAT,
             GameEventType.IR_HIT_TAKEN,
             GameEventType.GAME_OVER -> {
-                if (!isInActiveSession(packet)) return
+                if (!canProcessGameplayPacket(packet)) return
                 PvpEventBus.publish(PvpEvent.RemotePlayerStateUpdated(packet))
             }
         }
+    }
+
+    private fun canProcessGameplayPacket(packet: GameStatePacket): Boolean {
+        if (ALLOW_MESSAGES_WITHOUT_SESSION_OVERRIDE) {
+            return true
+        }
+        return isInActiveSession(packet)
     }
 
     private fun isInActiveSession(packet: GameStatePacket): Boolean {

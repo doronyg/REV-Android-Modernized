@@ -16,21 +16,24 @@ import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
-import com.wowwee.bluetoothrobotcontrollib.RobotCommand
 import com.wowwee.bluetoothrobotcontrollib.rev.REVCommandValues.kRevSendIRCommand
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotConstant
 import com.wowwee.revandroidsampleproject.R
+import com.wowwee.revandroidsampleproject.network.GameEventType
+import com.wowwee.revandroidsampleproject.network.GameStatePacket
 import com.wowwee.revandroidsampleproject.pvp.GameSessionCoordinator
+import com.wowwee.revandroidsampleproject.pvp.PvpEvent
 import com.wowwee.revandroidsampleproject.robot.REVRobotEvent
 import com.wowwee.revandroidsampleproject.utils.AppPreferences
 import com.wowwee.revandroidsampleproject.utils.DriveCommandSampler
 import com.wowwee.revandroidsampleproject.utils.HapticUtils
 import com.wowwee.revandroidsampleproject.utils.JoystickView
 import com.wowwee.revandroidsampleproject.utils.Player
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
+import io.reactivex.rxjava3.disposables.CompositeDisposable
 import kotlin.math.sin
 import kotlin.math.sqrt
-
 
 
 class AdvancedDrivingFragment : ConnectedRevFragment() {
@@ -68,8 +71,10 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
     private lateinit var wheelThumb: ImageView
     private lateinit var leverThumb: ImageView
     private lateinit var btnFire: Button
+    private lateinit var btnStartGame: Button
     private lateinit var btnMode: Button
     private lateinit var btnSimulateHit: Button
+    private lateinit var btnSimulateOtherHit: Button
     private lateinit var tvTitle: TextView
     private lateinit var hitSplashOverlay: View
 
@@ -82,11 +87,16 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
     private var fireCooldownAnimator: ValueAnimator? = null
     private var hitStunUntilMs: Long = 0L
     private var fireCooldownUntilMs: Long = 0L
-    private var hitCount: Int = 0
+    private var localHitsTakenCount: Int = 0
+    private var otherPlayerHitsTakenCount: Int = 0
+    private var localPlayerId: String? = null
+    private var isWaitingForGameAck: Boolean = false
+    private var isSessionActive: Boolean = false
     private var fireButtonLayers: LayerDrawable? = null
 
     private val movementVector = floatArrayOf(0f, 0f)
     private val sendVector = floatArrayOf(0f, 0f)
+    private val pvpDisposables = CompositeDisposable()
 
     private val driveHandler = Handler(Looper.getMainLooper())
     private val clearHitStunRunnable = Runnable { clearHitStun() }
@@ -115,8 +125,10 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         wheelThumb = view.findViewById(R.id.joystickR)
         leverThumb = view.findViewById(R.id.joystickL)
         btnFire = view.findViewById(R.id.btnFire)
+        btnStartGame = view.findViewById(R.id.btnStartGame)
         btnMode = view.findViewById(R.id.btnMode)
         btnSimulateHit = view.findViewById(R.id.btnSimulateHit)
+        btnSimulateOtherHit = view.findViewById(R.id.btnSimulateOtherHit)
         tvTitle = view.findViewById(R.id.tvDriverModeTitle)
         hitSplashOverlay = view.findViewById(R.id.hitSplashOverlay)
 
@@ -151,8 +163,14 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         btnMode.setOnClickListener {
             showModeMenu()
         }
+        btnStartGame.setOnClickListener {
+            startGameAndWaitForAck()
+        }
         btnSimulateHit.setOnClickListener {
             triggerSimulatedHit()
+        }
+        btnSimulateOtherHit.setOnClickListener {
+            triggerSimulatedOtherPlayerHit()
         }
 
         return view
@@ -165,9 +183,12 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         }
 
         switchToDriverMode()
-        tvTitle.text = getString(R.string.advanced_mode_title_format, displayRevName())
+        updateDriverTitle()
         btnSimulateHit.visibility = if (isSimulatorMode()) View.VISIBLE else View.GONE
+        btnSimulateOtherHit.visibility = if (isSimulatorMode()) View.VISIBLE else View.GONE
+        updateStartGameButtonState()
         maybeShowFirstTimeInstructions()
+        bindPvpEventsIfNeeded()
 
         driveHandler.removeCallbacks(driveLoopRunnable)
         driveHandler.post(driveLoopRunnable)
@@ -223,6 +244,7 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         driveHandler.removeCallbacks(clearHitStunRunnable)
         driveHandler.removeCallbacks(clearFireCooldownRunnable)
         driveHandler.removeCallbacks(driveLoopRunnable)
+        pvpDisposables.clear()
         fireCooldownAnimator?.cancel()
         fireCooldownAnimator = null
         fireCooldownUntilMs = 0L
@@ -231,7 +253,108 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         movementVector[1] = 0f
         releaseWheelControl()
         releaseLeverControl()
+        updateDriverTitle()
         sendDriveVector(0f, 0f)
+    }
+
+    private fun bindPvpEventsIfNeeded() {
+        if (pvpDisposables.size() > 0) {
+            return
+        }
+
+        pvpDisposables.add(
+            GameSessionCoordinator.events
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe({ event ->
+                    onPvpEvent(event)
+                }, {
+                })
+        )
+    }
+
+    private fun onPvpEvent(event: PvpEvent) {
+        when (event) {
+            is PvpEvent.GameSessionActive -> {
+                localPlayerId = event.localId
+                isWaitingForGameAck = false
+                isSessionActive = true
+                updateStartGameButtonState()
+            }
+
+            is PvpEvent.RemotePlayerStateUpdated -> {
+                handleRemotePlayerStateUpdate(event.packet)
+            }
+
+            is PvpEvent.PvpNetworkError -> {
+                if (isWaitingForGameAck) {
+                    isWaitingForGameAck = false
+                    updateStartGameButtonState()
+                }
+            }
+
+            else -> Unit
+        }
+    }
+
+    private fun startGameAndWaitForAck() {
+        if (isWaitingForGameAck) {
+            return
+        }
+        isSessionActive = false
+        isWaitingForGameAck = true
+        updateStartGameButtonState()
+        GameSessionCoordinator.startGame()
+    }
+
+    private fun updateStartGameButtonState() {
+        when {
+            isSessionActive -> {
+                btnStartGame.isEnabled = true
+                btnStartGame.text = getString(R.string.advanced_mode_start_game_active_short)
+                btnStartGame.alpha = 1f
+            }
+
+            isWaitingForGameAck -> {
+                btnStartGame.isEnabled = false
+                btnStartGame.text = getString(R.string.advanced_mode_start_game_waiting_short)
+                btnStartGame.alpha = 0.8f
+            }
+
+            else -> {
+                btnStartGame.isEnabled = true
+                btnStartGame.text = getString(R.string.advanced_mode_start_game_short)
+                btnStartGame.alpha = 1f
+            }
+        }
+    }
+
+    private fun handleRemotePlayerStateUpdate(packet: GameStatePacket) {
+        if (packet.eventType != GameEventType.IR_HIT_TAKEN) {
+            return
+        }
+        val localIdSnapshot = localPlayerId
+        if (!localIdSnapshot.isNullOrBlank() && packet.senderId == localIdSnapshot) {
+            return
+        }
+        if (localIdSnapshot.isNullOrBlank() && packet.senderId == displayRevName()) {
+            return
+        }
+
+        otherPlayerHitsTakenCount = packet.totalHitsReceived.coerceAtLeast(0)
+        updateDriverTitle()
+    }
+
+    private fun updateDriverTitle() {
+        if (localHitsTakenCount == 0 && otherPlayerHitsTakenCount == 0) {
+            tvTitle.text = getString(R.string.advanced_mode_title_format, displayRevName())
+            return
+        }
+        tvTitle.text = getString(
+            R.string.advanced_mode_title_score_format,
+            displayRevName(),
+            localHitsTakenCount,
+            otherPlayerHitsTakenCount
+        )
     }
 
     private fun handleDriveTouch(event: MotionEvent): Boolean {
@@ -492,32 +615,37 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         )
 
 
-        val remainHealthValue = Player.getInstance().getShot(robot, irCommand, activity)
+        Player.getInstance().getShot(robot, irCommand, activity)
         GameSessionCoordinator.registerHitTaken(UNKNOWN_ATTACKER_ID, DEFAULT_HIT_DAMAGE)
-        hitCount += 1
-
-        tvTitle.text = getString(
-            R.string.advanced_mode_title_hit_format,
-            displayRevName(),
-            (remainHealthValue * 100f).toInt(),
-            hitCount
-        )
+        localHitsTakenCount += 1
+        updateDriverTitle()
 
         startHitStun()
     }
 
     private fun triggerSimulatedHit() {
-        // Simulate the same incoming callback event path used by real hardware.
-        onRevEvent(REVRobotEvent.RobotCommandProcessed(robot = null, RobotCommand(kRevSendIRCommand, ArrayList<Byte>(byteArrayOf(0.toByte(), 3.toByte()).toList()))))
+        // Drive the same local hit handler directly so simulator hit always registers and emits UDP.
+        handleRevDidReceiveIRCommand(robot = null, irCommand = 0, rxSensor = 3)
+    }
+
+    private fun triggerSimulatedOtherPlayerHit() {
+        val simulatedPacket = GameStatePacket(
+            senderId = "SIM_REMOTE",
+            packetId = SystemClock.uptimeMillis(),
+            timestamp = System.currentTimeMillis(),
+            health = 100,
+            eventType = GameEventType.IR_HIT_TAKEN,
+            totalHitsReceived = otherPlayerHitsTakenCount + 1
+        )
+        onPvpEvent(PvpEvent.RemotePlayerStateUpdated(simulatedPacket))
     }
 
     private fun startHitStun() {
+        resetDrivingControlsForHitStun()
         hitStunUntilMs = SystemClock.uptimeMillis() + HIT_STUN_MS
         driveHandler.removeCallbacks(clearHitStunRunnable)
         driveHandler.postDelayed(clearHitStunRunnable, HIT_STUN_MS)
 
-        movementVector[0] = 0f
-        movementVector[1] = 0f
         rev?.revStop()
 
         enableDrive(false)
@@ -526,12 +654,26 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         vibrateOnHit()
     }
 
+    private fun resetDrivingControlsForHitStun() {
+        // Force-reset both controls before disabling touch so pointer IDs never remain latched.
+        wheelCenterAnimator?.cancel()
+        leverCenterAnimator?.cancel()
+        wheelPointerId = MotionEvent.INVALID_POINTER_ID
+        leverPointerId = MotionEvent.INVALID_POINTER_ID
+        movementVector[0] = 0f
+        movementVector[1] = 0f
+        rotateWheelBase(0f, force = true)
+        resetWheelThumbPosition()
+        resetLeverThumbPosition()
+        updateWheelThumbVisual(false)
+    }
+
     private fun clearHitStun() {
         hitStunUntilMs = 0L
         enableDrive(true)
         hitSplashOverlay.visibility = View.GONE
         hitSplashOverlay.alpha = 0f
-        tvTitle.text = getString(R.string.advanced_mode_title_format, displayRevName())
+        updateDriverTitle()
     }
 
     private fun enableDrive(enabled: Boolean) {
@@ -597,7 +739,7 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         hitSplashOverlay.visibility = View.VISIBLE
         hitSplashOverlay.alpha = 1f
 
-        val shakeTargets = listOf(wheelControl, leverControl, btnFire, btnMode)
+        val shakeTargets = listOf(wheelControl, leverControl, btnFire, btnStartGame, btnMode)
         val amplitudePx = 18f
         ValueAnimator.ofFloat(0f, 1f).apply {
             duration = HIT_SHAKE_MS

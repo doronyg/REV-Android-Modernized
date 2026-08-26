@@ -52,7 +52,12 @@
     <string name="advanced_mode_title">Advanced Wheel Mode</string>
     <string name="advanced_mode_title_format">Advanced Wheel Mode: %1$s</string>
     <string name="advanced_mode_title_hit_format">%1$s  HP:%2$d  Hits:%3$d</string>
+    <string name="advanced_mode_title_score_format">%1$s  Got:%2$d  Other:%3$d</string>
+    <string name="advanced_mode_start_game_short">GO</string>
+    <string name="advanced_mode_start_game_waiting_short">ACK</string>
+    <string name="advanced_mode_start_game_active_short">ON</string>
     <string name="advanced_mode_simulate_hit">Get Hit</string>
+    <string name="advanced_mode_simulate_other_hit">Other Got Hit</string>
     <string name="advanced_mode_instructions_title">Advanced Wheel Controls</string>
     <string name="advanced_mode_instructions_body">Use the left lever for forward/reverse throttle (center line is neutral), and use the center wheel to steer left/right. Tap Fire to shoot.</string>
     <string name="advanced_mode_forward_short">F</string>
