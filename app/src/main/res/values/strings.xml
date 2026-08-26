@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">RevSampleProject</string>
+    <string name="app_name">REV Cars</string>
     <string name="scanning">Scanning for REV</string>
     <string name="win_title">You win</string>
     <string name="lost_title">You lose</string>
