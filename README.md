@@ -1,15 +1,14 @@
-REV Android SDK (Modernized & Extended)
-=======================================
+# REV Android — Modernized App & SDK
 
 ![](Images/REV.png)
 
-This repository is a modernized, actively maintained Android app and SDK continuation for the WowWee REV robotic car system.
+This repository is my modernized continuation of the Android app and SDK for the WowWee REV robotic car system.
 
 Original SDK credit: [WowWeeLabs/REV-Android-SDK](https://github.com/WowWeeLabs/REV-Android-SDK.git)
 
-> **Why this project exists:** When the original companion apps disappeared from app stores, many REV cars became effectively unusable. What started as a weekend effort to restore playability for my family evolved into an ongoing Android/BLE modernization project focused on architecture quality, UX iteration, and reliability.
+> **Why this project exists:** When the original companion apps disappeared from official app stores, many physical REV vehicles were left completely unusable. What started as a weekend effort to restore playability for my family evolved into an ongoing Android, BLE, and networking project.
 
-If you are here to build with REV, welcome. If you are evaluating my work, this repository reflects a pragmatic engineering approach: modern Android tooling, Kotlin-first additions, and clear, evolving app flows.
+---
 
 Table of Contents
 -----------------
@@ -30,115 +29,126 @@ Table of Contents
 What Changed Since the Original SDK
 -----------------------------------
 
-Highlights from the recent modernization work:
+The original SDK provided the starting point for the REV BLE communication layer, but parts of it required debugging and fixes before the hardware could be reliably discovered and controlled. From there, the project evolved into a broader modernization of the Android application.
 
-- Upgraded build stack (Gradle/AGP), AndroidX migration, and current SDK targets.
-- Replaced old binary integration with source module integration for `bluetoothrobotcontrollib_src`.
-- Added permissions-first app startup flow and moved BLE scan/connect logic out of fragment lifecycle.
-- Added bounded scan sessions, modern BLE discovery flow, and reliability fallbacks.
-- Added multiple driving experiences beyond legacy manual flow:
-  - Advanced wheel + lever driving mode.
-  - Path drawing mode.
-  - Experiments mode for repeatable movement command testing.
-- Added session-only Simulator Mode so UI and drive flows can be exercised without a car.
-- Added kiosk lock architecture for controlled/demo scenarios.
-- Refined advanced steering UX with arcade-style wheel/yoke visuals, responsive steering motion, and smooth return-to-center animation.
+Highlights from the modernization work:
+
+- **Modern Android Stack:** Updated the project from its original Android 5.1-era environment to target Android 16 (API 36), using AGP 8.x, JDK 17, and AndroidX.
+- **Source Module Integration:** Replaced legacy binary dependencies with source integration through `bluetoothrobotcontrollib_src`.
+- **BLE Lifecycle Improvements:** Moved BLE scanning and connection handling out of Fragment/UI lifecycles into dedicated state managers, so vehicle connections are less dependent on individual screens.
+- **Simulator Mode:** Added a hardware-independent drive session so the application and controls can be exercised without a physical REV car.
+- **Reactive State & Telemetry:** Added RxJava-based event streams for control events and vehicle telemetry.
+- **Phone-to-Phone Networking:** Added a lightweight UDP layer for synchronizing game state between phones while each phone maintains its own BLE connection to a REV vehicle.
+- **Custom Driving Controls:** Added arcade-style steering controls, throttle interaction, hit/fire controls, and animated steering return-to-center behavior.
 
 Engineering Context and Architecture
 ------------------------------------
 
-If you are reviewing this project as a portfolio-style codebase, this is the practical context:
+The application builds on the original REV SDK while separating the application code from the underlying vehicle communication layer.
 
-- **Base platform:** built on top of the original [WowWeeLabs/REV-Android-SDK](https://github.com/WowWeeLabs/REV-Android-SDK.git), with continued compatibility for the existing REV BLE control stack.
-- **Modernization path:** migrated to AndroidX and AGP 8.x-era tooling, added Kotlin-first flows, and updated runtime permission + BLE discovery handling for modern Android.
-- **Engineering direction:** reduced lifecycle coupling (for example, scan/connect orchestration moved out of fragment-only ownership), added simulator-driven development paths, and separated stable user flows from experimental features.
+       ┌─────────────────────────────────────────────────────────┐
+       │                   Player 1 (Phone A)                    │
+       │    [ UI Views ] ──> [ Reactive State / Telemetry ]      │
+       └───────────┬─────────────────────────┬───────────────────┘
+                   │                         │
+              BLE / Control            UDP / Game State
+                   │                         │
+                   ▼                         ▼
+            ┌─────────────┐           ┌─────────────┐
+            │ REV Vehicle │           │ Phone B / P2│
+            └─────────────┘           └─────────────┘
+
+- **Original SDK:** Based on the original [WowWeeLabs/REV-Android-SDK](https://github.com/WowWeeLabs/REV-Android-SDK.git), with fixes to the existing BLE communication code where needed to restore reliable hardware discovery and control.
+- **Android Modernization:** Updated the project for current Android tooling, AndroidX, and modern Bluetooth permission and discovery APIs, including Android 12+ `BLUETOOTH_SCAN` and `BLUETOOTH_CONNECT`.
+- **Application Architecture:** Separated UI code from BLE connection/state handling and drive-session logic.
+- **Simulation:** Drive sessions can run without a physical vehicle, allowing the UI and control logic to be exercised independently of BLE hardware.
+- **Networking:** UDP is used for phone-to-phone game state while BLE remains responsible for communication with the vehicles.
 
 Current App Flow
 ----------------
 
-1. **Permissions**: the app starts with runtime permission and Bluetooth readiness checks so BLE operations are explicit and predictable.
-2. **Scan**: once ready, the app moves into REV discovery/scan, where you either connect to a nearby car or switch into simulator session flow.
-3. **Drive**: after entering a session, the app opens driving controls (Advanced by default), with mode switching available for Manual, Path, and Experiments.
-
-This keeps the top-level flow simple while allowing room for iterative UX and architecture changes.
+1. **Permissions & Readiness:** The app checks the required runtime permissions and Bluetooth adapter state before starting BLE operations.
+2. **Scan & Discovery:** The app performs bounded BLE scans to find nearby REV vehicles, with an option to enter Simulator Mode instead.
+3. **Drive Session:** Once a vehicle or simulator session is selected, the app opens the driving controls.
+4. **Driving:** Advanced mode is used by default, with the option to switch to Manual mode or other internal testing surfaces.
 
 Drive Modes
 -----------
 
-- `Manual`: lightweight dual-joystick + fire control.
-- `Advanced`: playful steering wheel/yoke + throttle lever + fire.
-- `Path`: draw a route and let REV trace it.
-- `Experiments`: tune speed/duration/interval for repeatable command testing.
+- `Advanced`: Arcade-style steering wheel/yoke, throttle lever, and fire/hit controls.
+- `Manual`: Dual-joystick driving layout with fire control.
+- `Simulator`: Drive-session simulation without a physical REV vehicle.
+- `Experimental Modes`: Internal tools for route tracing and movement command testing.
 
 Requirements
 ------------
 
-- A recent Android Studio version compatible with AGP 8.x.
+- Android Studio compatible with AGP 8.x.
 - JDK 17.
+- Target SDK: Android 16 (API 36).
+- Minimum SDK: Android 5.1 (API 22).
 - Android device with BLE support.
-- For real driving: at least one physical REV car.
-- For simulator sessions: no physical REV required.
+- For physical driving: At least one WowWee REV car.
+- For simulator sessions: No physical hardware required.
 
 Quick Start
 -----------
 
-1. Clone this repository.
-2. Open it in Android Studio.
-3. Let Gradle sync finish.
-4. Run the `app` module on a physical Android device.
+1. Clone this repository:
 
-Example:
+       git clone https://github.com/doronyg/REV-Android-Modernized.git
+       cd REV-Android-Modernized
 
-```bash
-git clone <your-fork-or-repo-url>
-cd REV-Android-SDK
-./gradlew :app:assembleDebug
-```
+2. Open the project in Android Studio.
+3. Allow Gradle sync to complete.
+4. Build the application:
+
+       ./gradlew :app:assembleDebug
+
+5. Install and run the `app` module on an Android device.
 
 Using a Real REV Car
 --------------------
 
-1. Power on your REV.
-2. Open the app and complete permission/Bluetooth prompts.
-3. Wait on scan for automatic candidate detection, or use discovery flow when prompted.
-4. After connect, drive in Advanced mode or switch to Manual/Path/Experiments.
+1. Power on the REV vehicle.
+2. Launch the app and complete the required Bluetooth permission prompts.
+3. Wait for the scan screen to detect the vehicle, or start discovery manually.
+4. Once connected, drive in **Advanced** mode or switch to **Manual** mode.
 
 Using Simulator Mode
 --------------------
 
-Use this mode to test navigation and driving UX without a BLE car.
+Simulator Mode allows the application to be used without a physical REV vehicle.
 
-1. Launch the app and complete permission/Bluetooth prompts.
+1. Launch the app.
 2. On the scan screen, enable **Simulator Mode**.
-3. The app opens the driving screen with a nullable REV session.
-4. Exit simulator mode from scan when you want to return to live BLE flow.
-
-Note: Simulator Mode is session-only by design and does not emulate physical BLE behavior.
+3. The app creates a simulated drive session without establishing a Bluetooth connection.
+4. Use the driving controls normally.
+5. Exit Simulator Mode from the scan screen to return to normal BLE operation.
 
 Project Structure
 -----------------
 
-- `app/`: Android sample app, modernized flows, and driving modes.
-- `bluetoothrobotcontrollib_src/`: REV Bluetooth SDK source module.
+- `app/`: Android application module containing the UI, drive controls, UDP networking, and drive-session logic.
+- `bluetoothrobotcontrollib_src/`: Source version of the REV Bluetooth communication library, migrated from the original binary dependency.
 
 Roadmap
 -------
 
-- Increase gameplay and "pick up and play" fun.
-- Add more car-vs-car game mechanics and match flow ideas.
-- Keep improving BLE reliability and compatibility with current Android permission models.
-- Continue separating stable features from experimental testing surfaces.
+- Expand multi-car match mechanics and real-time hit scoring.
+- Improve BLE reconnection and recovery behavior.
+- Continue separating modern application code from the original SDK implementation.
 
 License and Attribution
 -----------------------
 
-- This project remains under Apache 2.0. See [`LICENSE.md`](LICENSE.md).
+- This project remains under the **Apache License 2.0**. See [`LICENSE.md`](LICENSE.md).
 - Credit to the original SDK and product ecosystem:
   - Original repository: [WowWeeLabs/REV-Android-SDK](https://github.com/WowWeeLabs/REV-Android-SDK.git)
   - Product information: <http://www.wowwee.com>
-- You are free to build free or paid apps with this SDK. Please clearly differentiate your app from official WowWee branding to avoid user confusion.
+- You are free to build free or paid apps with this SDK. Please clearly differentiate your application from official WowWee branding to avoid user confusion.
 
 Contributing
 ------------
 
-Issues and pull requests are welcome. If you are building something cool with REV, feel free to open a PR and share it.
+Issues and pull requests are welcome. If you are building something cool with REV, feel free to open an issue or pull request to share it!
