@@ -75,8 +75,16 @@ object SoundEffects {
 
     private val random = Random()
     private val audioScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    @Volatile
+    private var soundEnabled = true
 
     private var wasInit = false
+
+    fun setSoundEnabled(enabled: Boolean) {
+        soundEnabled = enabled
+    }
+
+    fun isSoundEnabled(): Boolean = soundEnabled
 
     // Cached PCM buffers
     private val bumpBuffer: ShortArray by lazy { generateBumpData() }
@@ -114,6 +122,9 @@ object SoundEffects {
     // --- Playback Engine ---
 
     private fun playPrecalculatedBuffer(buffer: ShortArray) {
+        if (!soundEnabled) {
+            return
+        }
         audioScope.launch {
             val audioTrack = AudioTrack.Builder()
                 .setAudioAttributes(

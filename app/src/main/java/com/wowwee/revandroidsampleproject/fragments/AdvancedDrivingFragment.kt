@@ -238,9 +238,16 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
     private fun showModeMenu() {
         val context = context ?: return
         val kioskToggleLabel = getString(kioskModeToggleLabelResId())
+        val soundToggleLabel = getString(
+            if (SoundEffects.isSoundEnabled()) {
+                R.string.driver_mode_disable_sound
+            } else {
+                R.string.driver_mode_enable_sound
+            }
+        )
         val deviceAddress = currentDeviceAddress(ARG_DEVICE_ADDRESS)
         val modeOptions = DrivingModeSwitch.modeOptionsExcluding(DrivingModeOption.ADVANCED)
-        val labels = mutableListOf(kioskToggleLabel, getString(R.string.driver_mode_help))
+        val labels = mutableListOf(kioskToggleLabel, getString(R.string.driver_mode_help), soundToggleLabel)
         labels.addAll(DrivingModeSwitch.modeLabels(context, modeOptions))
 
         AlertDialog.Builder(context)
@@ -256,7 +263,12 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
                     return@setItems
                 }
 
-                val selectedMode = modeOptions.getOrNull(which - 2) ?: return@setItems
+                if (which == 2) {
+                    SoundEffects.setSoundEnabled(!SoundEffects.isSoundEnabled())
+                    return@setItems
+                }
+
+                val selectedMode = modeOptions.getOrNull(which - 3) ?: return@setItems
                 DrivingModeSwitch.switchToMode(this, selectedMode, deviceAddress)
             }
             .show()
