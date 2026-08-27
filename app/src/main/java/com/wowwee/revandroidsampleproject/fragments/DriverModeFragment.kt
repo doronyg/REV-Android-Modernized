@@ -20,6 +20,7 @@ import com.wowwee.revandroidsampleproject.utils.AppPreferences
 import com.wowwee.revandroidsampleproject.utils.DriveCommandSampler
 import com.wowwee.revandroidsampleproject.utils.JoystickView
 import com.wowwee.revandroidsampleproject.utils.Player
+import com.wowwee.revandroidsampleproject.utils.SoundEffects
 
 class DriverModeFragment : ConnectedRevFragment() {
 
@@ -94,6 +95,7 @@ class DriverModeFragment : ConnectedRevFragment() {
         btnFire.setOnClickListener {
             rev?.let { robot ->
                 Player.getInstance().gunFire(robot, 0)
+                SoundEffects.playLaserShoot()
             }
         }
         btnMode.setOnClickListener {

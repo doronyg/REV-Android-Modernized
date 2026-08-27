@@ -32,6 +32,7 @@ import com.wowwee.revandroidsampleproject.utils.DriveCommandSampler
 import com.wowwee.revandroidsampleproject.utils.HapticUtils
 import com.wowwee.revandroidsampleproject.utils.JoystickView
 import com.wowwee.revandroidsampleproject.utils.Player
+import com.wowwee.revandroidsampleproject.utils.SoundEffects
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
 import io.reactivex.rxjava3.disposables.CompositeDisposable
 import kotlin.math.sin
@@ -78,6 +79,7 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
     private lateinit var tvBatteryLevel: TextView
     private lateinit var btnSimulateHit: Button
     private lateinit var btnSimulateOtherHit: Button
+    private lateinit var btnSimulateBump: Button
     private lateinit var tvTitle: TextView
     private lateinit var hitSplashOverlay: View
 
@@ -134,6 +136,7 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         tvBatteryLevel = view.findViewById(R.id.tvBatteryLevel)
         btnSimulateHit = view.findViewById(R.id.btnSimulateHit)
         btnSimulateOtherHit = view.findViewById(R.id.btnSimulateOtherHit)
+        btnSimulateBump = view.findViewById(R.id.btnSimulateBump)
         tvTitle = view.findViewById(R.id.tvDriverModeTitle)
         hitSplashOverlay = view.findViewById(R.id.hitSplashOverlay)
 
@@ -164,6 +167,7 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
             rev?.let { robot ->
                 Player.getInstance().gunFire(robot, 0)
             }
+            SoundEffects.playLaserShoot()
             startFireCooldown()
         }
         btnMode.setOnClickListener {
@@ -178,6 +182,9 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         btnSimulateOtherHit.setOnClickListener {
             triggerSimulatedOtherPlayerHit()
         }
+        btnSimulateBump.setOnClickListener {
+            triggerSimulatedBump()
+        }
 
         return view
     }
@@ -190,8 +197,10 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
 
         switchToDriverMode()
         updateDriverTitle()
-        btnSimulateHit.visibility = if (isSimulatorMode()) View.VISIBLE else View.GONE
-        btnSimulateOtherHit.visibility = if (isSimulatorMode()) View.VISIBLE else View.GONE
+        val simulatorVisibility = if (isSimulatorMode()) View.VISIBLE else View.GONE
+        btnSimulateHit.visibility = simulatorVisibility
+        btnSimulateOtherHit.visibility = simulatorVisibility
+        btnSimulateBump.visibility = simulatorVisibility
         updateStartGameButtonState()
         maybeShowFirstTimeInstructions()
         bindPvpEventsIfNeeded()
@@ -615,6 +624,9 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
                     handleRevDidReceiveIRCommand(event.robot, dataArray[0], dataArray[1])
                 }
             }
+            event is REVRobotEvent.BumpNotifyReceived -> {
+                handleBumpEvent()
+            }
             event is BatteryInfoReceived -> {
                 updateBatteryLevelVisual(event.batteryLevel)
             }
@@ -639,8 +651,8 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
             note = "irCommand=${irCommand.toInt()} rxSensor=${rxSensor.toInt()}"
         )
 
-
         Player.getInstance().getShot(robot, irCommand, activity)
+        SoundEffects.playLaserHit()
         GameSessionCoordinator.registerHitTaken(UNKNOWN_ATTACKER_ID, DEFAULT_HIT_DAMAGE)
         localHitsTakenCount += 1
         updateDriverTitle()
@@ -663,6 +675,15 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
             totalHitsReceived = otherPlayerHitsTakenCount + 1
         )
         onPvpEvent(PvpEvent.RemotePlayerStateUpdated(simulatedPacket))
+    }
+
+    private fun triggerSimulatedBump() {
+        handleBumpEvent()
+    }
+
+    private fun handleBumpEvent() {
+        SoundEffects.playBump()
+        HapticUtils.vibrate(context, 200, 255)
     }
 
     private fun startHitStun() {

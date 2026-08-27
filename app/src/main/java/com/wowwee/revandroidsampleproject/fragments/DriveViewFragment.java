@@ -50,6 +50,7 @@ import com.wowwee.revandroidsampleproject.utils.BroadcastReceiverUtils;
 import com.wowwee.revandroidsampleproject.utils.JoystickView;
 import com.wowwee.revandroidsampleproject.utils.Player;
 import com.wowwee.revandroidsampleproject.utils.REVPlayer;
+import com.wowwee.revandroidsampleproject.utils.SoundEffects;
 import com.wowwee.revandroidsampleproject.weapon.WeaponManager;
 
 import java.util.List;
@@ -328,6 +329,7 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 			@Override
 			public void onClick(View view) {
 				Player.getInstance().gunFire(rev, selectedGun);
+				SoundEffects.INSTANCE.playLaserShoot();
 			}
 		});
 
@@ -741,6 +743,7 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 	//================================================================================
 
 	private void handleRevDidReceiveIRCommand(final REVRobot rev, final byte irCommand, final byte rxSensor) {
+		SoundEffects.INSTANCE.playLaserHit();
 		getFragmentActivity().runOnUiThread(new Runnable() {
 			@Override
 			public void run() {
@@ -871,6 +874,8 @@ public class DriveViewFragment extends BaseViewFragment implements OnTouchListen
 									if (event instanceof REVRobotEvent.IrCommandReceived) {
 										REVRobotEvent.IrCommandReceived irEvent = (REVRobotEvent.IrCommandReceived) event;
 										handleRevDidReceiveIRCommand(irEvent.getRobot(), irEvent.getIrCommand(), irEvent.getRxSensor());
+									} else if (event instanceof REVRobotEvent.BumpNotifyReceived) {
+										SoundEffects.INSTANCE.playBump();
 									} else if (event instanceof REVRobotEvent.DeviceReady) {
 										handleRevDeviceReady(((REVRobotEvent.DeviceReady) event).getRobot());
 									} else if (event instanceof REVRobotEvent.DeviceDisconnected) {

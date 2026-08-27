@@ -24,6 +24,7 @@ import com.wowwee.revandroidsampleproject.robot.REVRobotEvent;
 import com.wowwee.revandroidsampleproject.robot.REVRobotEventBus;
 import com.wowwee.revandroidsampleproject.utils.KioskLockManager;
 import com.wowwee.revandroidsampleproject.utils.PermissionsFlowHelper;
+import com.wowwee.revandroidsampleproject.utils.SoundEffects;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
@@ -35,6 +36,11 @@ public class MainActivity extends FragmentActivity implements KioskLockHost {
 	private final CompositeDisposable revEventDisposables = new CompositeDisposable();
 	@Nullable
 	private OnBackInvokedCallback onBackInvokedCallback;
+
+	public MainActivity() {
+		super();
+		SoundEffects.INSTANCE.warmUpCache();
+	}
 
 	private final FragmentManager.FragmentLifecycleCallbacks kioskFragmentCallbacks = new FragmentManager.FragmentLifecycleCallbacks() {
 		@Override
