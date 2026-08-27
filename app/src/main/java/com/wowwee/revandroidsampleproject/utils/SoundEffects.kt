@@ -23,11 +23,11 @@ object SoundEffects {
     // --- Crisp Minimal Mechanical Impact (120ms) ---
     private const val BUMP_DURATION_MS = 120
     private const val BUMP_START_FREQ_HZ = 800.0   // Bright mechanical impact crack
-    private const val BUMP_BASE_FREQ_HZ = 120.0    // Mid-range body (easily playable by small speakers)
+    private const val BUMP_BASE_FREQ_HZ = 120.0    // Mid-range body
     private const val BUMP_SWEEP_DECAY = 18.0      // Very quick snap
     private const val BUMP_IMPACT_GAIN = 0.70
     private const val BUMP_NOISE_GAIN = 0.40
-    private const val BUMP_FILTER_ALPHA = 0.45     // Higher alpha for a sharper, metallic crunch
+    private const val BUMP_FILTER_ALPHA = 0.45     // Metallic crunch
 
     // --- Laser Hit Parameters ---
     private const val LASER_HIT_DURATION_MS = 300
@@ -40,6 +40,13 @@ object SoundEffects {
     private const val LASER_HIT_BODY_DECAY = 4.5
     private const val LASER_HIT_TONE_GAIN = 0.8
     private const val LASER_HIT_SIZZLE_GAIN = 0.2
+
+    // --- Low Sci-Fi Synth Point Scored Parameters (300ms) ---
+    private const val POINT_SCORED_DURATION_MS = 300
+    private const val C4_FREQ_HZ = 261.63          // C4: Warm mid-low base pitch
+    private const val E4_FREQ_HZ = 329.63          // E4
+    private const val G4_FREQ_HZ = 392.00          // G4
+    private const val POINT_SCORED_GAIN = 0.70
 
     // --- Laser Shoot & Reload Sequence Parameters (5000ms total) ---
     private const val LASER_SHOOT_SEQUENCE_MS = 5000
@@ -57,11 +64,11 @@ object SoundEffects {
     private const val BLAST_HARMONIC_GAIN = 0.3
     private const val BLAST_ENVELOPE_DECAY = 5.0
 
-    // Phase 3: Single Monotonous Loading Hum (Much Quieter)
+    // Phase 3: Single Monotonous Loading Hum
     private const val RELOAD_SINGLE_TONE_HZ = 440.0 // Single tone (A4)
     private const val RELOAD_HUM_GAIN = 0.02        // Soft background hum
 
-    // Phase 4: High-Register Sci-Fi Power Sweep & Lock (600ms)
+    // Phase 4: High-Register Sci-Fi Power Sweep & Lock
     private const val LOCK_START_FREQ_HZ = 1200.0
     private const val LOCK_TARGET_FREQ_HZ = 4800.0
     private const val LOCK_GAIN = 0.60
@@ -74,6 +81,7 @@ object SoundEffects {
     // Cached PCM buffers
     private val bumpBuffer: ShortArray by lazy { generateBumpData() }
     private val laserHitBuffer: ShortArray by lazy { generateLaserHitData() }
+    private val pointScoredBuffer: ShortArray by lazy { generatePointScoredData() }
     private val laserShootBuffer: ShortArray by lazy { generateLaserShootData() }
 
     fun warmUpCache() {
@@ -82,6 +90,7 @@ object SoundEffects {
         audioScope.launch {
             bumpBuffer
             laserHitBuffer
+            pointScoredBuffer
             laserShootBuffer
         }
     }
@@ -92,6 +101,10 @@ object SoundEffects {
 
     fun playLaserHit() {
         playPrecalculatedBuffer(laserHitBuffer)
+    }
+
+    fun playPointScored() {
+        playPrecalculatedBuffer(pointScoredBuffer)
     }
 
     fun playLaserShoot() {
@@ -141,16 +154,13 @@ object SoundEffects {
             val t = i.toDouble() / SAMPLE_RATE
             val progress = i.toDouble() / numSamples
 
-            // 1. Sharp pitch drop from 800Hz down to 120Hz for a crisp mechanical "clang"
             val bodyFreq = BUMP_START_FREQ_HZ * exp(-progress * BUMP_SWEEP_DECAY) + BUMP_BASE_FREQ_HZ
             val bodySignal = sin(2.0 * PI * bodyFreq * t)
 
-            // 2. High-pass/band-pass noise burst for plastic/metallic collision texture
             val rawNoise = random.nextDouble() * 2.0 - 1.0
             val filteredNoise = lastNoiseSample + BUMP_FILTER_ALPHA * (rawNoise - lastNoiseSample)
             lastNoiseSample = filteredNoise
 
-            // 3. Ultra-fast decay envelopes (120ms total)
             val bodyEnvelope = exp(-progress * 12.0)
             val noiseEnvelope = exp(-progress * 16.0)
 
@@ -184,6 +194,57 @@ object SoundEffects {
         return buffer
     }
 
+    private fun generatePointScoredData(): ShortArray {
+        val numSamples = SAMPLE_RATE * POINT_SCORED_DURATION_MS / 1000
+        val buffer = ShortArray(numSamples)
+
+        for (i in 0 until numSamples) {
+            val t = i.toDouble() / SAMPLE_RATE
+            val timeMs = (t * 1000).toInt()
+
+            val targetFreq: Double
+            val stepProgress: Double
+            val isFinal: Boolean
+
+            when {
+                // Step 1: C4 (0 - 70ms)
+                timeMs < 70 -> {
+                    targetFreq = C4_FREQ_HZ
+                    stepProgress = timeMs / 70.0
+                    isFinal = false
+                }
+                // Step 2: E4 (70 - 150ms)
+                timeMs < 150 -> {
+                    targetFreq = E4_FREQ_HZ
+                    stepProgress = (timeMs - 70) / 80.0
+                    isFinal = false
+                }
+                // Step 3: G4 (150 - 300ms)
+                else -> {
+                    targetFreq = G4_FREQ_HZ
+                    stepProgress = (timeMs - 150) / 150.0
+                    isFinal = true
+                }
+            }
+
+            // Dual Oscillator Synth Combo: Sine fundamental + Softened Square Wave for retro synth body
+            val sineCore = sin(2.0 * PI * targetFreq * t)
+            val squareTone = if (sin(2.0 * PI * targetFreq * t) >= 0) 0.3 else -0.3
+            val synthSignal = (sineCore * 0.7) + (squareTone * 0.3)
+
+            // Envelope: Fast attack per note, smooth exponential tail on the last note
+            val envelope = if (!isFinal) {
+                sin(stepProgress * PI)
+            } else {
+                exp(-stepProgress * 3.0)
+            }
+
+            val mixed = synthSignal * envelope * POINT_SCORED_GAIN
+            buffer[i] = (mixed.coerceIn(-1.0, 1.0) * MAX_PCM_AMPLITUDE).toInt().toShort()
+        }
+        return buffer
+    }
+
     private fun generateLaserShootData(): ShortArray {
         val numSamples = SAMPLE_RATE * LASER_SHOOT_SEQUENCE_MS / 1000
         val buffer = ShortArray(numSamples)
@@ -200,7 +261,6 @@ object SoundEffects {
             var sampleVal = 0.0
 
             when {
-                // Phase 1: Laser Blast (0 - 500 ms)
                 timeMs < blastEndMs -> {
                     val progress = timeMs.toDouble() / BLAST_DURATION_MS
                     val baseFreq = BLAST_START_FREQ_HZ * exp(-progress * BLAST_SWEEP_DECAY) + BLAST_END_FREQ_HZ
@@ -214,38 +274,27 @@ object SoundEffects {
                     sampleVal = (primarySignal + harmonicSignal) * envelope
                 }
 
-                // Phase 2: Silence Gap (500 - 700 ms)
                 timeMs < pauseEndMs -> {
                     sampleVal = 0.0
                 }
 
-                // Phase 3: Single Monotonous Low/Mid Hum (700 - 4400 ms) - Ultra quiet background
                 timeMs < reloadEndMs -> {
                     val progress = (timeMs - pauseEndMs).toDouble() / RELOAD_HUM_DURATION_MS
-
-                    // Pure single pitch tone (440 Hz)
                     val pureTone = sin(2.0 * PI * RELOAD_SINGLE_TONE_HZ * t)
 
-                    // Soft background hiss for electrical energy texture
                     val rawNoise = random.nextDouble() * 2.0 - 1.0
                     filteredNoise += 0.10 * (rawNoise - filteredNoise)
 
                     val combined = pureTone + filteredNoise
-
-                    // Smooth fade-in, volume builds gently from 30% to 100% of RELOAD_HUM_GAIN
                     val volumeCurve = (0.3 + 0.7 * progress) * (progress.coerceAtMost(0.02) / 0.05)
 
                     sampleVal = combined * RELOAD_HUM_GAIN * volumeCurve
                 }
 
-                // Phase 4: High-Register Sci-Fi Sweep & Ready Lock (4400 - 5000 ms)
                 else -> {
                     val progress = (timeMs - reloadEndMs).toDouble() / CHIME_DURATION_MS
-
-                    // High-register exponential pitch rise (1200 Hz -> 4800 Hz)
                     val carrierFreq = LOCK_START_FREQ_HZ * exp(progress * 1.3863)
 
-                    // FM sideband modulation for metallic laser-charge texture
                     val fmModFreq = 300.0 + (300.0 * progress)
                     val fmModIndex = 10.0 * (1.0 - progress * 0.4)
                     val modulation = sin(2.0 * PI * fmModFreq * t) * fmModIndex
@@ -253,7 +302,6 @@ object SoundEffects {
                     val primaryLockSignal = sin(2.0 * PI * carrierFreq * t + modulation)
                     val highShimmer = sin(2.0 * PI * (carrierFreq * 1.5) * t) * 0.25 * progress
 
-                    // Build up to peak at 75% duration, then sharp resonant decay
                     val envelope = if (progress < 0.75) {
                         (progress / 0.75)
                     } else {

@@ -53,6 +53,7 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         private const val FIRE_RELOAD_MS = 5000L
         private const val HIT_SHAKE_MS = 420L
         private const val HIT_VIBRATION_DURATION = 220L
+        private const val POINT_SCORED_SOUND_DELAY_MS = 1000L
         private const val DEFAULT_HIT_DAMAGE = 1
         private const val UNKNOWN_ATTACKER_ID = "UNKNOWN"
         private const val DRAWABLE_LEVEL_MAX = 10000
@@ -364,6 +365,7 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
 
         otherPlayerHitsTakenCount = packet.totalHitsReceived.coerceAtLeast(0)
         updateDriverTitle()
+        driveHandler.postDelayed({ SoundEffects.playPointScored() }, POINT_SCORED_SOUND_DELAY_MS)
     }
 
     private fun updateDriverTitle() {
