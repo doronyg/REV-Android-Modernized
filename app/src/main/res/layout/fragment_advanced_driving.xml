@@ -106,7 +106,7 @@
         android:layout_alignParentTop="true"
         android:layout_marginTop="16dp"
         android:layout_marginEnd="8dp"
-        android:layout_toStartOf="@id/btnMode"
+        android:layout_toStartOf="@id/tvBatteryLevel"
         android:background="@drawable/advanced_mode_bubble"
         android:elevation="3dp"
         android:text="@string/advanced_mode_start_game_short"
@@ -131,6 +131,23 @@
         android:textColor="#FFFFFFFF"
         android:textSize="22sp"
         android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/tvBatteryLevel"
+        android:layout_width="88dp"
+        android:layout_height="36dp"
+        android:layout_alignTop="@id/btnMode"
+        android:layout_marginTop="10dp"
+        android:layout_marginEnd="10dp"
+        android:layout_toStartOf="@id/btnMode"
+        android:background="@drawable/advanced_battery_pill_background"
+        android:elevation="3dp"
+        android:gravity="center"
+        android:text="0"
+        android:textColor="#FFFFFFFF"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
 
     <Button
         android:id="@+id/btnFire"

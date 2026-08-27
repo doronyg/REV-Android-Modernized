@@ -28,6 +28,9 @@ object REVRobotEventBus {
             robot.setCallbackInterface(broadcaster)
         }
     }
+
+    @JvmStatic
+    fun emitBatteryInfo(robot: REVRobot?, batteryLevel: Int, voltage: Int) {
+        broadcaster.emitBatteryInfo(robot, batteryLevel, voltage)
+    }
 }
-
-

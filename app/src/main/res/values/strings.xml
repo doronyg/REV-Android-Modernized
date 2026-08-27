@@ -66,6 +66,7 @@
     <string name="advanced_mode_forward_short">F</string>
     <string name="advanced_mode_backward_short">B</string>
     <string name="advanced_mode_hit_overlay">HIT!</string>
+    <string name="battery_level_content_description">Battery level %1$d percent</string>
 
     <string name="path_mode_title">Path Draw Mode</string>
     <string name="path_mode_title_format">Path Draw Mode: %1$s</string>

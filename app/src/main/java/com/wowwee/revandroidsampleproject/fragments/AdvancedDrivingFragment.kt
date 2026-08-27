@@ -25,6 +25,8 @@ import com.wowwee.revandroidsampleproject.network.GameStatePacket
 import com.wowwee.revandroidsampleproject.pvp.GameSessionCoordinator
 import com.wowwee.revandroidsampleproject.pvp.PvpEvent
 import com.wowwee.revandroidsampleproject.robot.REVRobotEvent
+import com.wowwee.revandroidsampleproject.robot.REVRobotEvent.BatteryInfoReceived
+import com.wowwee.revandroidsampleproject.robot.REVRobotEvent.RobotCommandProcessed
 import com.wowwee.revandroidsampleproject.utils.AppPreferences
 import com.wowwee.revandroidsampleproject.utils.DriveCommandSampler
 import com.wowwee.revandroidsampleproject.utils.HapticUtils
@@ -73,6 +75,7 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
     private lateinit var btnFire: Button
     private lateinit var btnStartGame: Button
     private lateinit var btnMode: Button
+    private lateinit var tvBatteryLevel: TextView
     private lateinit var btnSimulateHit: Button
     private lateinit var btnSimulateOtherHit: Button
     private lateinit var tvTitle: TextView
@@ -93,6 +96,7 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
     private var isWaitingForGameAck: Boolean = false
     private var isSessionActive: Boolean = false
     private var fireButtonLayers: LayerDrawable? = null
+    private var batteryPillLayers: LayerDrawable? = null
 
     private val movementVector = floatArrayOf(0f, 0f)
     private val sendVector = floatArrayOf(0f, 0f)
@@ -127,12 +131,14 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         btnFire = view.findViewById(R.id.btnFire)
         btnStartGame = view.findViewById(R.id.btnStartGame)
         btnMode = view.findViewById(R.id.btnMode)
+        tvBatteryLevel = view.findViewById(R.id.tvBatteryLevel)
         btnSimulateHit = view.findViewById(R.id.btnSimulateHit)
         btnSimulateOtherHit = view.findViewById(R.id.btnSimulateOtherHit)
         tvTitle = view.findViewById(R.id.tvDriverModeTitle)
         hitSplashOverlay = view.findViewById(R.id.hitSplashOverlay)
 
         fireButtonLayers = (btnFire.background as? LayerDrawable)
+        batteryPillLayers = (tvBatteryLevel.background as? LayerDrawable)
         updateFireButtonReloadVisual(1f, active = true)
 
         wheelControl.updateRightView()
@@ -189,6 +195,7 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         updateStartGameButtonState()
         maybeShowFirstTimeInstructions()
         bindPvpEventsIfNeeded()
+        rev?.revGetBatteryLevel()
 
         driveHandler.removeCallbacks(driveLoopRunnable)
         driveHandler.post(driveLoopRunnable)
@@ -602,14 +609,26 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
 
     override fun onRevEvent(event: REVRobotEvent) {
         when {
-            event is REVRobotEvent.RobotCommandProcessed -> {
+            event is RobotCommandProcessed -> {
                 val dataArray = event.command.dataArray
                 if (event.command.cmdByte == kRevSendIRCommand && dataArray.size >= 2) {
                     handleRevDidReceiveIRCommand(event.robot, dataArray[0], dataArray[1])
                 }
             }
+            event is BatteryInfoReceived -> {
+                updateBatteryLevelVisual(event.batteryLevel)
+            }
             else -> super.onRevEvent(event)
         }
+    }
+
+    private fun updateBatteryLevelVisual(level: Int) {
+        val clampedLevel = level.coerceIn(0, 100)
+        val fillLevel = (clampedLevel / 100f * DRAWABLE_LEVEL_MAX).toInt().coerceIn(0, DRAWABLE_LEVEL_MAX)
+        batteryPillLayers?.findDrawableByLayerId(R.id.battery_fill_layer)?.level = fillLevel
+        tvBatteryLevel.text = clampedLevel.toString()
+        tvBatteryLevel.contentDescription = getString(R.string.battery_level_content_description, clampedLevel)
+        tvBatteryLevel.visibility = View.VISIBLE
     }
 
     private fun handleRevDidReceiveIRCommand(robot: REVRobot?, irCommand: Byte, rxSensor: Byte) {

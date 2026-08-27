@@ -13,6 +13,10 @@ class REVRobotEventBroadcaster : REVRobotInterface {
 
     val events: Observable<REVRobotEvent> = subject.hide()
 
+    fun emitBatteryInfo(robot: REVRobot?, batteryLevel: Int, voltage: Int) {
+        subject.onNext(REVRobotEvent.BatteryInfoReceived(robot, batteryLevel, voltage))
+    }
+
     override fun revDeviceReady(robot: REVRobot) {
         subject.onNext(REVRobotEvent.DeviceReady(robot))
     }
@@ -22,7 +26,7 @@ class REVRobotEventBroadcaster : REVRobotInterface {
     }
 
     override fun revDidReceiveBatteryInfo(robot: REVRobot, batteryLevel: Int, voltage: Int) {
-        subject.onNext(REVRobotEvent.BatteryInfoReceived(robot, batteryLevel, voltage))
+        emitBatteryInfo(robot, batteryLevel, voltage)
     }
 
     override fun revDidReceiveHardwareVersion(
@@ -105,5 +109,6 @@ class REVRobotEventBroadcaster : REVRobotInterface {
         subject.onNext(REVRobotEvent.RobotJumpedOverRamp(robot))
     }
 }
+
 
 
