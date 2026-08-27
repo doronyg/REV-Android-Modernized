@@ -23,6 +23,9 @@ class KioskLockManager {
     fun isKioskLockGloballyEnabled(activity: FragmentActivity): Boolean =
         AppPreferences.isKioskLockGloballyEnabled(activity)
 
+    fun isKioskLockDisabledByUser(context: Context): Boolean =
+        AppPreferences.isKioskLockDisabledByUser(context.applicationContext)
+
     fun setKioskLockGloballyEnabled(
         activity: FragmentActivity,
         enabled: Boolean,
@@ -30,6 +33,16 @@ class KioskLockManager {
     ) {
         AppPreferences.setKioskLockGloballyEnabled(activity, enabled)
         Log.d(tag, "setKioskLockGloballyEnabled(): enabled=$enabled")
+        syncKioskState(activity, lockTarget)
+    }
+
+    fun setKioskLockDisabledByUser(
+        activity: FragmentActivity,
+        disabled: Boolean,
+        lockTarget: KioskLockInterface?
+    ) {
+        AppPreferences.setKioskLockDisabledByUser(activity, disabled)
+        Log.d(tag, "setKioskLockDisabledByUser(): disabled=$disabled")
         syncKioskState(activity, lockTarget)
     }
 
@@ -67,28 +80,31 @@ class KioskLockManager {
     }
 
     fun syncKioskState(activity: FragmentActivity, lockTarget: KioskLockInterface?) {
-        val previousShouldLock = lastShouldLock
-        val globalEnabled = AppPreferences.isKioskLockGloballyEnabled(activity)
-        val shouldLock = lockTarget?.isKioskLockEnabled() == true && globalEnabled
+        val kioskAllowed = isKioskAllowedByPreference(activity)
+        val targetWantsLock = lockTarget?.isKioskLockEnabled() == true
         val kioskEnabled = isInAnyLockTaskMode(activity)
 
-        if (!shouldLock) {
-            if (previousShouldLock || kioskEnabled) {
-                extendHoldoffFromNow(activity, "lock exit transition")
-            }
+        if (!kioskAllowed) {
             cancelPendingEnable()
             exitKioskIfActive(activity)
             val kioskEnabledNow = isInAnyLockTaskMode(activity)
             lockTarget?.onKioskModeChanged(kioskEnabledNow)
             lastShouldLock = false
-            Log.d(tag, "syncKioskState(): shouldLock=false kioskEnabledNow=$kioskEnabledNow")
+            Log.d(tag, "syncKioskState(): kiosk not allowed by preference kioskEnabledNow=$kioskEnabledNow")
             return
         }
 
         if (kioskEnabled) {
             cancelPendingEnable()
             lockTarget?.onKioskModeChanged(true)
-            lastShouldLock = true
+            lastShouldLock = targetWantsLock
+            return
+        }
+
+        if (!targetWantsLock) {
+            cancelPendingEnable()
+            lockTarget?.onKioskModeChanged(false)
+            lastShouldLock = false
             return
         }
 
@@ -164,7 +180,11 @@ class KioskLockManager {
         if (lockTarget == null) {
             return false
         }
-        return AppPreferences.isKioskLockGloballyEnabled(activity) && lockTarget.isKioskLockEnabled()
+        return isKioskAllowedByPreference(activity) && lockTarget.isKioskLockEnabled()
+    }
+
+    private fun isKioskAllowedByPreference(activity: FragmentActivity): Boolean {
+        return AppPreferences.isKioskLockGloballyEnabled(activity) && !AppPreferences.isKioskLockDisabledByUser(activity)
     }
 
     private fun enterKioskIfPossible(activity: FragmentActivity) {
@@ -202,3 +222,9 @@ class KioskLockManager {
         return activityManager.lockTaskModeState != ActivityManager.LOCK_TASK_MODE_NONE
     }
 }
+
+
+
+
+
+

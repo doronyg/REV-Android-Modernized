@@ -21,7 +21,7 @@ object DrivingModeSwitch {
         return options.map { context.getString(it.labelResId) }.toTypedArray()
     }
 
-    fun showModeSelectionDialog(
+    fun showMenu(
         host: ConnectedRevFragment,
         currentMode: DrivingModeOption,
         deviceAddress: String?
@@ -30,12 +30,19 @@ object DrivingModeSwitch {
         val activity = host.activity ?: return
 
         val options = modeOptionsExcluding(currentMode)
-        val labels = modeLabels(context, options)
+        val kioskToggleLabel = context.getString(host.kioskModeToggleLabelResId())
+        val labels = mutableListOf(kioskToggleLabel)
+        labels.addAll(modeLabels(context, options))
 
         androidx.appcompat.app.AlertDialog.Builder(context)
-            .setTitle(R.string.driver_mode_switch_title)
-            .setItems(labels) { _, which ->
-                val selectedMode = options.getOrNull(which) ?: return@setItems
+            .setTitle(R.string.driver_mode_menu_title)
+            .setItems(labels.toTypedArray()) { _, which ->
+                if (which == 0) {
+                    host.toggleKioskLockDisabledByUser()
+                    return@setItems
+                }
+
+                val selectedMode = options.getOrNull(which - 1) ?: return@setItems
                 navigateToMode(activity, selectedMode, deviceAddress)
             }
             .show()

@@ -12,6 +12,8 @@ import androidx.fragment.app.FragmentActivity;
 
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotFinder;
+import com.wowwee.revandroidsampleproject.R;
+import com.wowwee.revandroidsampleproject.utils.AppPreferences;
 
 public abstract class BaseViewFragment extends Fragment {
 	protected Rect viewRect;
@@ -30,7 +32,34 @@ public abstract class BaseViewFragment extends Fragment {
 	public static FragmentActivity getFragmentActivity(){
 		return activity;
 	}
-	
+
+	public boolean isKioskLockDisabledByUser() {
+		FragmentActivity hostActivity = getActivity();
+		if (hostActivity instanceof KioskLockHost) {
+			return ((KioskLockHost) hostActivity).isKioskLockDisabledByUser();
+		}
+		return AppPreferences.isKioskLockDisabledByUser(getContext());
+	}
+
+	public void setKioskLockDisabledByUser(boolean disabled) {
+		FragmentActivity hostActivity = getActivity();
+		if (hostActivity instanceof KioskLockHost) {
+			((KioskLockHost) hostActivity).setKioskLockDisabledByUser(disabled);
+			return;
+		}
+		AppPreferences.setKioskLockDisabledByUser(getContext(), disabled);
+	}
+
+	public int kioskModeToggleLabelResId() {
+		return isKioskLockDisabledByUser()
+				? R.string.driver_mode_enable_kiosk
+				: R.string.driver_mode_disable_kiosk;
+	}
+
+	public void toggleKioskLockDisabledByUser() {
+		setKioskLockDisabledByUser(!isKioskLockDisabledByUser());
+	}
+
 	@Override
 	public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 		if (container == null)

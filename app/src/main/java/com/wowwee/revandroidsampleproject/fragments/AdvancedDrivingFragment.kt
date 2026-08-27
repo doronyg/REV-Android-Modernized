@@ -220,20 +220,26 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
 
     private fun showModeMenu() {
         val context = context ?: return
+        val kioskToggleLabel = getString(kioskModeToggleLabelResId())
         val deviceAddress = currentDeviceAddress(ARG_DEVICE_ADDRESS)
         val modeOptions = DrivingModeSwitch.modeOptionsExcluding(DrivingModeOption.ADVANCED)
-        val labels = mutableListOf(getString(R.string.driver_mode_help))
+        val labels = mutableListOf(kioskToggleLabel, getString(R.string.driver_mode_help))
         labels.addAll(DrivingModeSwitch.modeLabels(context, modeOptions))
 
         AlertDialog.Builder(context)
-            .setTitle(R.string.driver_mode_switch_title)
+            .setTitle(R.string.driver_mode_menu_title)
             .setItems(labels.toTypedArray()) { _, which ->
                 if (which == 0) {
+                    toggleKioskLockDisabledByUser()
+                    return@setItems
+                }
+
+                if (which == 1) {
                     showDriverInstructions()
                     return@setItems
                 }
 
-                val selectedMode = modeOptions.getOrNull(which - 1) ?: return@setItems
+                val selectedMode = modeOptions.getOrNull(which - 2) ?: return@setItems
                 DrivingModeSwitch.switchToMode(this, selectedMode, deviceAddress)
             }
             .show()

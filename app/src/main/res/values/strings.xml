@@ -42,6 +42,9 @@
     <string name="driver_mode_short">M</string>
     <string name="driver_mode_switch_hint">Long press to change mode</string>
     <string name="driver_mode_switch_title">Select Driving Mode</string>
+    <string name="driver_mode_menu_title">Menu</string>
+    <string name="driver_mode_disable_kiosk">Disable Kiosk Mode</string>
+    <string name="driver_mode_enable_kiosk">Enable Kiosk Mode</string>
     <string name="driver_mode_option_manual">Manual Mode</string>
     <string name="driver_mode_option_advanced">Advanced Wheel Mode</string>
     <string name="driver_mode_option_path">Path Draw Mode</string>

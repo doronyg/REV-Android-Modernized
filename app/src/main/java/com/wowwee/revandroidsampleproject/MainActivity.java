@@ -17,6 +17,7 @@ import androidx.fragment.app.FragmentManager;
 import com.wowwee.bluetoothrobotcontrollib.BluetoothRobot;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotFinder;
+import com.wowwee.revandroidsampleproject.fragments.KioskLockHost;
 import com.wowwee.revandroidsampleproject.fragments.KioskLockInterface;
 import com.wowwee.revandroidsampleproject.pvp.GameSessionCoordinator;
 import com.wowwee.revandroidsampleproject.robot.REVRobotEvent;
@@ -28,7 +29,7 @@ import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 
-public class MainActivity extends FragmentActivity {
+public class MainActivity extends FragmentActivity implements KioskLockHost {
 	private static final String TAG = "MainActivity";
 	private final KioskLockManager kioskLockManager = new KioskLockManager();
 	private final CompositeDisposable revEventDisposables = new CompositeDisposable();
@@ -193,8 +194,18 @@ public class MainActivity extends FragmentActivity {
 		return kioskLockManager.isKioskLockGloballyEnabled(this);
 	}
 
+	@Override
+	public boolean isKioskLockDisabledByUser() {
+		return kioskLockManager.isKioskLockDisabledByUser(getApplicationContext());
+	}
+
 	public void setKioskLockGloballyEnabled(boolean enabled) {
 		kioskLockManager.setKioskLockGloballyEnabled(this, enabled, currentKioskLockTarget());
+	}
+
+	@Override
+	public void setKioskLockDisabledByUser(boolean disabled) {
+		kioskLockManager.setKioskLockDisabledByUser(this, disabled, currentKioskLockTarget());
 	}
 
 	private void performDefaultBackNavigation() {

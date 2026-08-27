@@ -100,7 +100,7 @@ class DriverModeFragment : ConnectedRevFragment() {
             Toast.makeText(requireContext(), R.string.driver_mode_switch_hint, Toast.LENGTH_SHORT).show()
         }
         btnMode.setOnLongClickListener {
-            showModeSelectionDialog()
+            showMenu()
             true
         }
         btnDriverHelp.setOnClickListener {
@@ -148,8 +148,8 @@ class DriverModeFragment : ConnectedRevFragment() {
         sendDriveVector(0f, 0f)
     }
 
-    private fun showModeSelectionDialog() {
-        DrivingModeSwitch.showModeSelectionDialog(
+    private fun showMenu() {
+        DrivingModeSwitch.showMenu(
             host = this,
             currentMode = DrivingModeOption.MANUAL,
             deviceAddress = currentDeviceAddress(ARG_DEVICE_ADDRESS)

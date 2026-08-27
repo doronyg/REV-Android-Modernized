@@ -14,6 +14,7 @@ object AppPreferences {
     private const val PREF_PATH_MODE_INSTRUCTIONS_SEEN = "path_mode_instructions_seen"
     private const val PREF_KIOSK_ENABLE_ALLOWED_AT_MS = "kiosk_enable_allowed_at_ms"
     private const val PREF_KIOSK_LOCK_GLOBALLY_ENABLED = "kiosk_lock_globally_enabled"
+    private const val PREF_KIOSK_LOCK_DISABLED_BY_USER = "kiosk_lock_disabled_by_user"
 
     @JvmStatic
     fun hasConnectedRevBefore(context: Context?): Boolean =
@@ -67,6 +68,15 @@ object AppPreferences {
     @JvmStatic
     fun setKioskLockGloballyEnabled(context: Context?, enabled: Boolean) {
         putBoolean(context, PREF_KIOSK_LOCK_GLOBALLY_ENABLED, enabled)
+    }
+
+    @JvmStatic
+    fun isKioskLockDisabledByUser(context: Context?): Boolean =
+        getBoolean(context, PREF_KIOSK_LOCK_DISABLED_BY_USER, false)
+
+    @JvmStatic
+    fun setKioskLockDisabledByUser(context: Context?, disabled: Boolean) {
+        putBoolean(context, PREF_KIOSK_LOCK_DISABLED_BY_USER, disabled)
     }
 
     @JvmStatic
