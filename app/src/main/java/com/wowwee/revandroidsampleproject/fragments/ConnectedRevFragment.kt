@@ -54,6 +54,10 @@ abstract class ConnectedRevFragment : BaseViewFragment(), KioskLockInterface {
 
     protected fun navigateBackToScan() {
         val activity = activity ?: return
+        val current = activity.supportFragmentManager.findFragmentById(R.id.view_id_content)
+        if (current is ScanFragment) {
+            return
+        }
         FragmentHelper.switchFragment(activity.supportFragmentManager, ScanFragment(), R.id.view_id_content, false)
     }
 
@@ -87,12 +91,24 @@ abstract class ConnectedRevFragment : BaseViewFragment(), KioskLockInterface {
 
     protected open fun onRevEvent(event: REVRobotEvent) {
         if (isCurrentRevDisconnected(event)) {
-            navigateBackToScan()
+            REVPlayer.getInstance().setPlayerRev(null)
+            rev = null
         }
     }
 
     protected fun isCurrentRevDisconnected(event: REVRobotEvent): Boolean {
-        return event is REVRobotEvent.DeviceDisconnected && event.robot == rev
+        if (event !is REVRobotEvent.DeviceDisconnected) {
+            return false
+        }
+
+        val disconnectedRobot = event.robot
+        if (disconnectedRobot == rev) {
+            return true
+        }
+
+        val disconnectedAddress = safeAddress(disconnectedRobot) ?: return false
+        val currentAddress = safeAddress(rev) ?: safeAddress(REVPlayer.getInstance().playerRev)
+        return !currentAddress.isNullOrBlank() && disconnectedAddress.equals(currentAddress, ignoreCase = true)
     }
 
     override fun isKioskLockEnabled(): Boolean = true
@@ -129,9 +145,9 @@ abstract class ConnectedRevFragment : BaseViewFragment(), KioskLockInterface {
         simulatorEventHandler.postDelayed(simulatorBatteryEventRunnable, SIMULATOR_BATTERY_EVENT_DELAY_MS)
     }
 
-    private fun safeAddress(robot: REVRobot): String? {
+    private fun safeAddress(robot: REVRobot?): String? {
         return try {
-            robot.bluetoothDevice?.address
+            robot?.bluetoothDevice?.address
         } catch (_: SecurityException) {
             null
         }

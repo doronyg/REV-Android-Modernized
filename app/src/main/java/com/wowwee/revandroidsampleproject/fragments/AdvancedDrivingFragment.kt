@@ -32,6 +32,7 @@ import com.wowwee.revandroidsampleproject.utils.DriveCommandSampler
 import com.wowwee.revandroidsampleproject.utils.HapticUtils
 import com.wowwee.revandroidsampleproject.utils.JoystickView
 import com.wowwee.revandroidsampleproject.utils.Player
+import com.wowwee.revandroidsampleproject.utils.RevConnectionStateMachine
 import com.wowwee.revandroidsampleproject.utils.SoundEffects
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
 import io.reactivex.rxjava3.disposables.CompositeDisposable
@@ -78,9 +79,6 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
     private lateinit var btnStartGame: Button
     private lateinit var btnMode: Button
     private lateinit var tvBatteryLevel: TextView
-    private lateinit var btnSimulateHit: Button
-    private lateinit var btnSimulateOtherHit: Button
-    private lateinit var btnSimulateBump: Button
     private lateinit var tvTitle: TextView
     private lateinit var hitSplashOverlay: View
 
@@ -135,9 +133,6 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         btnStartGame = view.findViewById(R.id.btnStartGame)
         btnMode = view.findViewById(R.id.btnMode)
         tvBatteryLevel = view.findViewById(R.id.tvBatteryLevel)
-        btnSimulateHit = view.findViewById(R.id.btnSimulateHit)
-        btnSimulateOtherHit = view.findViewById(R.id.btnSimulateOtherHit)
-        btnSimulateBump = view.findViewById(R.id.btnSimulateBump)
         tvTitle = view.findViewById(R.id.tvDriverModeTitle)
         hitSplashOverlay = view.findViewById(R.id.hitSplashOverlay)
 
@@ -177,15 +172,6 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         btnStartGame.setOnClickListener {
             startGameAndWaitForAck()
         }
-        btnSimulateHit.setOnClickListener {
-            triggerSimulatedHit()
-        }
-        btnSimulateOtherHit.setOnClickListener {
-            triggerSimulatedOtherPlayerHit()
-        }
-        btnSimulateBump.setOnClickListener {
-            triggerSimulatedBump()
-        }
 
         return view
     }
@@ -198,10 +184,6 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
 
         switchToDriverMode()
         updateDriverTitle()
-        val simulatorVisibility = if (isSimulatorMode()) View.VISIBLE else View.GONE
-        btnSimulateHit.visibility = simulatorVisibility
-        btnSimulateOtherHit.visibility = simulatorVisibility
-        btnSimulateBump.visibility = simulatorVisibility
         updateStartGameButtonState()
         maybeShowFirstTimeInstructions()
         bindPvpEventsIfNeeded()
@@ -248,6 +230,10 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         val deviceAddress = currentDeviceAddress(ARG_DEVICE_ADDRESS)
         val modeOptions = DrivingModeSwitch.modeOptionsExcluding(DrivingModeOption.ADVANCED)
         val labels = mutableListOf(kioskToggleLabel, getString(R.string.driver_mode_help), soundToggleLabel)
+        val simulatorMenuIndex = if (isSimulatorMode()) labels.size else -1
+        if (isSimulatorMode()) {
+            labels.add(getString(R.string.advanced_mode_simulator_menu))
+        }
         labels.addAll(DrivingModeSwitch.modeLabels(context, modeOptions))
 
         AlertDialog.Builder(context)
@@ -268,8 +254,44 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
                     return@setItems
                 }
 
-                val selectedMode = modeOptions.getOrNull(which - 3) ?: return@setItems
+                if (which == simulatorMenuIndex) {
+                    showSimulatorEventMenu()
+                    return@setItems
+                }
+
+                val modeStartIndex = if (simulatorMenuIndex >= 0) 4 else 3
+                val selectedMode = modeOptions.getOrNull(which - modeStartIndex) ?: return@setItems
                 DrivingModeSwitch.switchToMode(this, selectedMode, deviceAddress)
+            }
+            .show()
+    }
+
+    private fun showSimulatorEventMenu() {
+        val context = context ?: return
+        val labels = arrayOf(
+            getString(R.string.advanced_mode_simulate_hit),
+            getString(R.string.advanced_mode_simulate_other_hit),
+            getString(R.string.advanced_mode_simulate_bump),
+            getString(R.string.simulator_event_request_permissions),
+            getString(R.string.simulator_event_request_enable_bluetooth),
+            getString(R.string.simulator_event_discovery_recommended),
+            getString(R.string.simulator_event_navigate_driver_mode),
+            getString(R.string.simulator_event_primary_disconnected)
+        )
+
+        AlertDialog.Builder(context)
+            .setTitle(R.string.advanced_mode_simulator_menu)
+            .setItems(labels) { _, which ->
+                when (which) {
+                    0 -> triggerSimulatedHit()
+                    1 -> triggerSimulatedOtherPlayerHit()
+                    2 -> triggerSimulatedBump()
+                    3 -> RevConnectionStateMachine.getInstance().emitUiEventForSimulator(RevConnectionStateMachine.UiEventType.REQUEST_PERMISSIONS)
+                    4 -> RevConnectionStateMachine.getInstance().emitUiEventForSimulator(RevConnectionStateMachine.UiEventType.REQUEST_ENABLE_BLUETOOTH)
+                    5 -> RevConnectionStateMachine.getInstance().emitUiEventForSimulator(RevConnectionStateMachine.UiEventType.DISCOVERY_RECOMMENDED)
+                    6 -> RevConnectionStateMachine.getInstance().emitUiEventForSimulator(RevConnectionStateMachine.UiEventType.NAVIGATE_TO_DRIVER_MODE)
+                    7 -> RevConnectionStateMachine.getInstance().emitUiEventForSimulator(RevConnectionStateMachine.UiEventType.PRIMARY_REV_DISCONNECTED)
+                }
             }
             .show()
     }

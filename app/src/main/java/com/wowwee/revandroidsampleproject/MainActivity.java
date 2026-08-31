@@ -19,21 +19,21 @@ import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotFinder;
 import com.wowwee.revandroidsampleproject.fragments.KioskLockHost;
 import com.wowwee.revandroidsampleproject.fragments.KioskLockInterface;
+import com.wowwee.revandroidsampleproject.fragments.ScanFragment;
 import com.wowwee.revandroidsampleproject.pvp.GameSessionCoordinator;
-import com.wowwee.revandroidsampleproject.robot.REVRobotEvent;
 import com.wowwee.revandroidsampleproject.robot.REVRobotEventBus;
 import com.wowwee.revandroidsampleproject.utils.KioskLockManager;
 import com.wowwee.revandroidsampleproject.utils.PermissionsFlowHelper;
+import com.wowwee.revandroidsampleproject.utils.RevConnectionStateMachine;
 import com.wowwee.revandroidsampleproject.utils.SoundEffects;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
-import io.reactivex.rxjava3.schedulers.Schedulers;
 
 public class MainActivity extends FragmentActivity implements KioskLockHost {
 	private static final String TAG = "MainActivity";
 	private final KioskLockManager kioskLockManager = new KioskLockManager();
-	private final CompositeDisposable revEventDisposables = new CompositeDisposable();
+	private final CompositeDisposable connectionUiDisposables = new CompositeDisposable();
 	@Nullable
 	private OnBackInvokedCallback onBackInvokedCallback;
 
@@ -63,6 +63,7 @@ public class MainActivity extends FragmentActivity implements KioskLockHost {
 
 		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
 		PermissionsFlowHelper.openPermissionsFragment(this);
+		RevConnectionStateMachine.getInstance().bindAppLevelRevEvents();
 	}
 
 	@Override
@@ -92,7 +93,8 @@ public class MainActivity extends FragmentActivity implements KioskLockHost {
 		kioskLockManager.onHostResume(this, currentKioskLockTarget());
 		GameSessionCoordinator.onHostResumed();
 		REVRobotEventBus.attachToConnectedRobots();
-		bindRevEventStream();
+		bindConnectionUiEvents();
+		syncFromConnectionStateMachine();
 		// disable idle timer
 		getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 	}
@@ -101,7 +103,7 @@ public class MainActivity extends FragmentActivity implements KioskLockHost {
 	protected void onPause() {
 		kioskLockManager.onHostPause(this, currentKioskLockTarget());
 		GameSessionCoordinator.onHostPaused();
-		revEventDisposables.clear();
+		connectionUiDisposables.clear();
 		super.onPause();
 	}
 
@@ -116,6 +118,7 @@ public class MainActivity extends FragmentActivity implements KioskLockHost {
 			robot.disconnect();
 		}
 		GameSessionCoordinator.onCarDisconnected();
+		RevConnectionStateMachine.getInstance().unbindAppLevelRevEvents();
 
 		BluetoothRobot.unbindBluetoothLeService(MainActivity.this);
 	}
@@ -136,29 +139,36 @@ public class MainActivity extends FragmentActivity implements KioskLockHost {
 		GameSessionCoordinator.onCarConnected(simulatorId, 8888, true);
 	}
 
-	private void bindRevEventStream() {
-		if (!revEventDisposables.isDisposed() && revEventDisposables.size() > 0) {
+	public void onPrimaryRevDisconnected() {
+		GameSessionCoordinator.onCarDisconnected();
+		Fragment currentFragment = getSupportFragmentManager().findFragmentById(R.id.view_id_content);
+		if (!(currentFragment instanceof ScanFragment)) {
+			PermissionsFlowHelper.openScanFragment(this);
+		}
+		RevConnectionStateMachine.getInstance().acknowledgePrimaryDisconnectUiHandled();
+	}
+
+	private void bindConnectionUiEvents() {
+		if (connectionUiDisposables.size() > 0) {
 			return;
 		}
 
-		revEventDisposables.add(
-				REVRobotEventBus.getEvents()
-						.observeOn(Schedulers.io())
-						.map(event -> event)
+		connectionUiDisposables.add(
+				RevConnectionStateMachine.getInstance().observeUiEvents()
 						.observeOn(AndroidSchedulers.mainThread())
-						.subscribe(
-								event -> {
-									if (event instanceof REVRobotEvent.DeviceDisconnected) {
-										Log.d(TAG, "REV event: device disconnected");
-									}
-								},
-								error -> Log.e(TAG, "REV event stream error", error)
-						)
+						.subscribe(event -> {
+							if (event.type == RevConnectionStateMachine.UiEventType.PRIMARY_REV_DISCONNECTED) {
+								onPrimaryRevDisconnected();
+							}
+						}, error -> Log.e(TAG, "Connection UI event stream error", error))
 		);
 	}
 
-	public void onPrimaryRevDisconnected() {
-		GameSessionCoordinator.onCarDisconnected();
+	private void syncFromConnectionStateMachine() {
+		RevConnectionStateMachine stateMachine = RevConnectionStateMachine.getInstance();
+		if (stateMachine.consumePrimaryDisconnectUiPending()) {
+			onPrimaryRevDisconnected();
+		}
 	}
 
 	private boolean handleBackPress() {

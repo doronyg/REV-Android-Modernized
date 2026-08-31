@@ -16,7 +16,7 @@ import com.wowwee.revandroidsampleproject.robot.REVRobotEventBus;
 import com.wowwee.revandroidsampleproject.utils.AppPreferences;
 import com.wowwee.revandroidsampleproject.utils.PermissionsFlowHelper;
 import com.wowwee.revandroidsampleproject.utils.REVPlayer;
-import com.wowwee.revandroidsampleproject.utils.RevScanStateMachine;
+import com.wowwee.revandroidsampleproject.utils.RevConnectionStateMachine;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
@@ -26,7 +26,7 @@ public class ScanFragment extends BaseViewFragment {
 
     private static final String TAG = "REV-ScanFragment";
 
-    private final RevScanStateMachine scanStateMachine = RevScanStateMachine.getInstance();
+    private final RevConnectionStateMachine scanStateMachine = RevConnectionStateMachine.getInstance();
 
     private TextView tvScanStatus;
     private Button btnScanRetry;
@@ -34,40 +34,7 @@ public class ScanFragment extends BaseViewFragment {
     private Button btnScanSimulator;
     private boolean shouldShowDiscoveryButton;
     private final CompositeDisposable revEventDisposables = new CompositeDisposable();
-
-    private final RevScanStateMachine.Listener scanListener = new RevScanStateMachine.Listener() {
-        @Override
-        public void onPermissionsRequired() {
-            PermissionsFlowHelper.openPermissionsFragment(getActivity());
-        }
-
-        @Override
-        public void onBluetoothEnableRequired() {
-            PermissionsFlowHelper.openPermissionsFragment(getActivity());
-        }
-
-        @Override
-        public void onScanStatusChanged(String status, boolean showRetry) {
-            updateScanStatus(status, showRetry);
-        }
-
-        @Override
-        public void onDiscoveryRecommended() {
-            shouldShowDiscoveryButton = true;
-            updateDiscoveryButtonVisibility();
-        }
-
-        @Override
-        public void onNavigateToDriverMode(REVRobot connectedRev) {
-            REVPlayer.getInstance().setPlayerRev(connectedRev);
-            AppPreferences.markHasConnectedRev(getActivity());
-            String connectedRevAddress = safeRevAddress(connectedRev);
-            if (getActivity() instanceof MainActivity) {
-                ((MainActivity) getActivity()).onPrimaryRevConnected(connectedRevAddress);
-            }
-            FragmentHelper.switchFragment(getFragmentActivity().getSupportFragmentManager(), AdvancedDrivingFragment.newInstance(connectedRevAddress), R.id.view_id_content, false);
-        }
-    };
+    private final CompositeDisposable connectionUiDisposables = new CompositeDisposable();
 
     public ScanFragment() {
     }
@@ -114,14 +81,16 @@ public class ScanFragment extends BaseViewFragment {
         btnScanSimulator.setText(R.string.scan_open_simulator);
         shouldShowDiscoveryButton = !AppPreferences.hasConnectedRevBefore(getActivity());
         updateDiscoveryButtonVisibility();
+        bindConnectionUiEvents();
         bindRevEvents();
-        scanStateMachine.start(getActivity(), scanListener, REVRobotEventBus.callbackInterface());
+        scanStateMachine.start(getActivity(), REVRobotEventBus.callbackInterface());
     }
 
     @Override
     public void onPause() {
         super.onPause();
         revEventDisposables.clear();
+        connectionUiDisposables.clear();
         if (!REVPlayer.getInstance().isSimulatorMode()) {
             scanStateMachine.stop();
         }
@@ -134,8 +103,9 @@ public class ScanFragment extends BaseViewFragment {
             shouldShowDiscoveryButton = !AppPreferences.hasConnectedRevBefore(getActivity());
             updateDiscoveryButtonVisibility();
             btnScanSimulator.setText(R.string.scan_open_simulator);
+            bindConnectionUiEvents();
             bindRevEvents();
-            scanStateMachine.start(getActivity(), scanListener, REVRobotEventBus.callbackInterface());
+            scanStateMachine.start(getActivity(), REVRobotEventBus.callbackInterface());
             return;
         }
 
@@ -174,13 +144,55 @@ public class ScanFragment extends BaseViewFragment {
                     event -> {
                         if (event instanceof REVRobotEvent.DeviceReady) {
                             scanStateMachine.onRobotReady(((REVRobotEvent.DeviceReady) event).getRobot());
-                        } else if (event instanceof REVRobotEvent.DeviceDisconnected) {
-                            scanStateMachine.onRobotDisconnected();
                         }
                     },
                     error -> Log.e(TAG, "REV event stream error", error)
                 )
         );
+    }
+
+    private void bindConnectionUiEvents() {
+        if (connectionUiDisposables.size() > 0) {
+            return;
+        }
+
+        connectionUiDisposables.add(
+            scanStateMachine.observeScanUiState()
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    state -> updateScanStatus(state.status, state.showRetry),
+                    error -> Log.e(TAG, "Scan state stream error", error)
+                )
+        );
+
+        connectionUiDisposables.add(
+            scanStateMachine.observeUiEvents()
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    event -> {
+                        if (event.type == RevConnectionStateMachine.UiEventType.REQUEST_PERMISSIONS
+                                || event.type == RevConnectionStateMachine.UiEventType.REQUEST_ENABLE_BLUETOOTH) {
+                            PermissionsFlowHelper.openPermissionsFragment(getActivity());
+                        } else if (event.type == RevConnectionStateMachine.UiEventType.DISCOVERY_RECOMMENDED) {
+                            shouldShowDiscoveryButton = true;
+                            updateDiscoveryButtonVisibility();
+                        } else if (event.type == RevConnectionStateMachine.UiEventType.NAVIGATE_TO_DRIVER_MODE && event.robot != null) {
+                            navigateToDriverMode(event.robot);
+                        }
+                    },
+                    error -> Log.e(TAG, "Scan UI event stream error", error)
+                )
+        );
+    }
+
+    private void navigateToDriverMode(REVRobot connectedRev) {
+        REVPlayer.getInstance().setPlayerRev(connectedRev);
+        AppPreferences.markHasConnectedRev(getActivity());
+        String connectedRevAddress = safeRevAddress(connectedRev);
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).onPrimaryRevConnected(connectedRevAddress);
+        }
+        FragmentHelper.switchFragment(getFragmentActivity().getSupportFragmentManager(), AdvancedDrivingFragment.newInstance(connectedRevAddress), R.id.view_id_content, false);
     }
 
     private String safeRevAddress(REVRobot rev) {

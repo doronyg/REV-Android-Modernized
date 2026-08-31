@@ -166,47 +166,6 @@
         android:textSize="20sp"
         android:textStyle="bold" />
 
-    <Button
-        android:id="@+id/btnSimulateHit"
-        android:layout_width="120dp"
-        android:layout_height="40dp"
-        android:layout_alignParentStart="true"
-        android:layout_alignParentBottom="true"
-        android:layout_marginStart="16dp"
-        android:layout_marginBottom="16dp"
-        android:background="?attr/colorButtonNormal"
-        android:text="@string/advanced_mode_simulate_hit"
-        android:textAllCaps="false"
-        android:textColor="?android:textColorPrimary"
-        android:visibility="gone" />
-
-    <Button
-        android:id="@+id/btnSimulateOtherHit"
-        android:layout_width="136dp"
-        android:layout_height="40dp"
-        android:layout_alignParentBottom="true"
-        android:layout_marginStart="8dp"
-        android:layout_marginBottom="16dp"
-        android:layout_toEndOf="@id/btnSimulateHit"
-        android:background="?attr/colorButtonNormal"
-        android:text="@string/advanced_mode_simulate_other_hit"
-        android:textAllCaps="false"
-        android:textColor="?android:textColorPrimary"
-        android:visibility="gone" />
-
-    <Button
-        android:id="@+id/btnSimulateBump"
-        android:layout_width="120dp"
-        android:layout_height="40dp"
-        android:layout_alignParentBottom="true"
-        android:layout_marginStart="8dp"
-        android:layout_marginBottom="16dp"
-        android:layout_toEndOf="@id/btnSimulateOtherHit"
-        android:background="?attr/colorButtonNormal"
-        android:text="@string/advanced_mode_simulate_bump"
-        android:textAllCaps="false"
-        android:textColor="?android:textColorPrimary"
-        android:visibility="gone" />
 
     <FrameLayout
         android:id="@+id/hitSplashOverlay"

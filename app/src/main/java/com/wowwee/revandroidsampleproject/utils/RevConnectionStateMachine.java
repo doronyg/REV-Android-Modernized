@@ -16,35 +16,72 @@ import android.os.Looper;
 import android.util.AndroidRuntimeException;
 import android.util.Log;
 
+import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot;
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotFinder;
 import com.wowwee.bluetoothrobotcontrollib.util.AdRecord;
+import com.wowwee.revandroidsampleproject.robot.REVRobotEvent;
+import com.wowwee.revandroidsampleproject.robot.REVRobotEventBus;
 
-import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
-public class RevScanStateMachine {
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
+import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.schedulers.Schedulers;
+import io.reactivex.rxjava3.subjects.BehaviorSubject;
+import io.reactivex.rxjava3.subjects.PublishSubject;
+import io.reactivex.rxjava3.subjects.Subject;
 
-    public interface Listener {
-        void onPermissionsRequired();
-        void onBluetoothEnableRequired();
-        void onScanStatusChanged(String status, boolean showRetry);
-        void onDiscoveryRecommended();
-        void onNavigateToDriverMode(REVRobot connectedRev);
+public class RevConnectionStateMachine {
+
+    public enum ConnectionState {
+        IDLE,
+        SCANNING,
+        SCAN_HOLD,
+        CONNECTING,
+        CONNECTED
+    }
+
+    public enum UiEventType {
+        REQUEST_PERMISSIONS,
+        REQUEST_ENABLE_BLUETOOTH,
+        DISCOVERY_RECOMMENDED,
+        NAVIGATE_TO_DRIVER_MODE,
+        PRIMARY_REV_DISCONNECTED
+    }
+
+    public static final class UiEvent {
+        public final UiEventType type;
+        @Nullable
+        public final REVRobot robot;
+
+        public UiEvent(UiEventType type) {
+            this(type, null);
+        }
+
+        public UiEvent(UiEventType type, @Nullable REVRobot robot) {
+            this.type = type;
+            this.robot = robot;
+        }
+    }
+
+    public static final class ScanUiState {
+        public final String status;
+        public final boolean showRetry;
+
+        public ScanUiState(String status, boolean showRetry) {
+            this.status = status;
+            this.showRetry = showRetry;
+        }
     }
 
     private static final String TAG = "REV-ScanStateMachine";
-
-    private static final int CONNECTION_IDLE = 0;
-    private static final int CONNECTION_SCANNING = 1;
-    private static final int CONNECTION_SCAN_HOLD = 2;
-    private static final int CONNECTION_CONNECTING = 3;
-    private static final int CONNECTION_CONNECTED = 4;
 
     private static final long PAIRED_FALLBACK_DELAY_MS = 2500L;
     private static final long SCAN_STARTUP_INITIAL_DELAY_MS = 500L;
@@ -52,54 +89,58 @@ public class RevScanStateMachine {
     private static final long DISCOVERY_RECOMMEND_MS = 10000L;
     private static final long SCAN_TIMEOUT_MS = 30000L;
 
-    private static RevScanStateMachine instance;
+    private static RevConnectionStateMachine instance;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private final ArrayList<BluetoothDevice> pairedRevCandidates = new ArrayList<BluetoothDevice>();
-    private WeakReference<Activity> activityRef = new WeakReference<Activity>(null);
-    private WeakReference<Listener> listenerRef = new WeakReference<Listener>(null);
+    private final CompositeDisposable appRevEventDisposables = new CompositeDisposable();
+    private final Subject<ScanUiState> scanUiStateSubject = BehaviorSubject.<ScanUiState>createDefault(new ScanUiState("Idle", false)).toSerialized();
+    private final Subject<UiEvent> uiEventSubject = PublishSubject.<UiEvent>create().toSerialized();
+    private final ArrayList<BluetoothDevice> pairedRevCandidates = new ArrayList<>();
+    @Nullable
+    private Context appContext = null;
     private REVRobot.REVRobotInterface robotCallback;
 
     private BluetoothAdapter bluetoothAdapter;
     private Timer tapTimer;
-    private int connectionState = CONNECTION_IDLE;
+    private ConnectionState connectionState = ConnectionState.IDLE;
     private long connectTimestamp;
     private long closestTimestamp;
     private REVRobot closestRev;
+    private REVRobot activeConnectedRev;
     private int scanStatusTick;
     private long pairedCandidatesUpdatedAtMs;
     private boolean pairedFallbackAttempted;
     private boolean isRevFinderReceiverRegistered;
     private boolean hasSeenCandidateInSession;
+    private boolean pendingPrimaryDisconnectUi;
+    private String lastScanStatus = "";
+    private boolean lastScanStatusShowRetry;
 
     private final Runnable scanStartupStepOneRunnable = this::runScanStartupStepOne;
     private final Runnable scanStartupStepTwoRunnable = this::runScanStartupStepTwo;
     private final Runnable discoveryRecommendRunnable = new Runnable() {
         @Override
         public void run() {
-            if (connectionState != CONNECTION_SCANNING || hasSeenCandidateInSession) {
+            if (connectionState != ConnectionState.SCANNING || hasSeenCandidateInSession) {
                 return;
             }
 
             notifyStatus("No device yet. You can open discovery mode.", false);
-             Listener scanListener = getListener();
-             if (scanListener != null) {
-                 scanListener.onDiscoveryRecommended();
-             }
+            uiEventSubject.onNext(new UiEvent(UiEventType.DISCOVERY_RECOMMENDED));
          }
     };
 
     private final Runnable scanTimeoutRunnable = new Runnable() {
         @Override
         public void run() {
-            if (connectionState == CONNECTION_CONNECTED) {
+            if (connectionState == ConnectionState.CONNECTED) {
                 return;
             }
 
             notifyStatus("No REV found. Tap retry or open discovery.", true);
             cancelTapTimer();
             scanLeDevice(false);
-            connectionState = CONNECTION_IDLE;
+            connectionState = ConnectionState.IDLE;
         }
     };
 
@@ -134,29 +175,38 @@ public class RevScanStateMachine {
         }
     };
 
-    public static synchronized RevScanStateMachine getInstance() {
+    public static synchronized RevConnectionStateMachine getInstance() {
         if (instance == null) {
-            instance = new RevScanStateMachine();
+            instance = new RevConnectionStateMachine();
         }
         return instance;
     }
 
-    private RevScanStateMachine() {
+    private RevConnectionStateMachine() {
     }
 
-    public void start(Activity hostActivity, Listener listener, REVRobot.REVRobotInterface callback) {
-        activityRef = new WeakReference<Activity>(hostActivity);
-        listenerRef = new WeakReference<Listener>(listener);
+    public Observable<ScanUiState> observeScanUiState() {
+        return scanUiStateSubject.hide();
+    }
+
+    public Observable<UiEvent> observeUiEvents() {
+        return uiEventSubject.hide();
+    }
+
+    public synchronized void start(@Nullable Context context, REVRobot.REVRobotInterface callback) {
+        if (context == null || context.getApplicationContext() == null || callback == null) {
+            notifyStatus("Cannot start scan right now", true);
+            return;
+        }
+
+        appContext = context.getApplicationContext();
         robotCallback = callback;
 
         notifyStatus("Preparing Bluetooth...", false);
         resetResumeState();
         if (!hasRequiredBluetoothPermissions()) {
             notifyStatus("Bluetooth permission missing", true);
-            Listener scanListener = getListener();
-            if (scanListener != null) {
-                scanListener.onPermissionsRequired();
-            }
+            uiEventSubject.onNext(new UiEvent(UiEventType.REQUEST_PERMISSIONS));
             return;
         }
         if (!initBluetooth()) {
@@ -170,6 +220,7 @@ public class RevScanStateMachine {
         }
         if (!ensureBluetoothAdapterAvailableAndEnabled()) {
             notifyStatus("Enable Bluetooth to continue", true);
+            uiEventSubject.onNext(new UiEvent(UiEventType.REQUEST_ENABLE_BLUETOOTH));
             return;
         }
 
@@ -188,25 +239,79 @@ public class RevScanStateMachine {
 
     public void onRobotReady(REVRobot rev) {
         closestRev = null;
+        activeConnectedRev = rev;
+        pendingPrimaryDisconnectUi = false;
         REVPlayer.getInstance().setPlayerRev(rev);
         notifyStatus("Connected to " + rev.getName(), false);
-        setConnectionState(CONNECTION_CONNECTED);
+        setConnectionState(ConnectionState.CONNECTED);
     }
 
-    public void onRobotDisconnected() {
+    public void onRobotDisconnected(REVRobot disconnectedRev) {
+        if (!isDisconnectForActiveRev(disconnectedRev)) {
+            return;
+        }
+
         pairedFallbackAttempted = false;
-        notifyStatus("Connection lost, retrying scan", false);
-        setConnectionState(CONNECTION_SCANNING);
+        activeConnectedRev = null;
+
+        REVRobot playerRev = REVPlayer.getInstance().getPlayerRev();
+        if (isSameRobot(playerRev, disconnectedRev)) {
+            REVPlayer.getInstance().setPlayerRev(null);
+        }
+
+        notifyStatus("Connection lost, returning to scan", false);
+        setConnectionState(ConnectionState.IDLE);
+        requestPrimaryDisconnectUi();
     }
 
-    public void retry() {
-        Activity hostActivity = getHostActivity();
-        Listener listener = getListener();
-        if (hostActivity == null || listener == null || robotCallback == null) {
+    public synchronized void retry() {
+        if (appContext == null || robotCallback == null) {
             notifyStatus("Cannot retry right now", true);
             return;
         }
-        start(hostActivity, listener, robotCallback);
+        start(appContext, robotCallback);
+    }
+
+    public synchronized ConnectionState getConnectionState() {
+        return connectionState;
+    }
+
+    public synchronized boolean isConnected() {
+        return connectionState == ConnectionState.CONNECTED && activeConnectedRev != null;
+    }
+
+    @Nullable
+    public synchronized REVRobot getActiveConnectedRev() {
+        return activeConnectedRev;
+    }
+
+    @Nullable
+    public synchronized String getActiveConnectedRevAddress() {
+        return safeAddress(activeConnectedRev);
+    }
+
+    public synchronized String getLastScanStatus() {
+        return lastScanStatus;
+    }
+
+    public synchronized boolean isLastScanStatusRetryVisible() {
+        return lastScanStatusShowRetry;
+    }
+
+    public synchronized boolean isPrimaryDisconnectUiPending() {
+        return pendingPrimaryDisconnectUi;
+    }
+
+    public synchronized boolean consumePrimaryDisconnectUiPending() {
+        if (!pendingPrimaryDisconnectUi) {
+            return false;
+        }
+        pendingPrimaryDisconnectUi = false;
+        return true;
+    }
+
+    public synchronized void acknowledgePrimaryDisconnectUiHandled() {
+        pendingPrimaryDisconnectUi = false;
     }
 
     private void resetResumeState() {
@@ -214,10 +319,11 @@ public class RevScanStateMachine {
         pairedCandidatesUpdatedAtMs = 0L;
         pairedFallbackAttempted = false;
         hasSeenCandidateInSession = false;
+        activeConnectedRev = null;
     }
 
     private boolean hasRequiredBluetoothPermissions() {
-        Context context = getHostActivity();
+        Context context = appContext;
         if (context == null) {
             return false;
         }
@@ -234,12 +340,12 @@ public class RevScanStateMachine {
     }
 
     private boolean initBluetooth() {
-        Activity activity = getHostActivity();
-        if (activity == null) {
+        Context context = appContext;
+        if (context == null) {
             return false;
         }
 
-        BluetoothManager bluetoothManager = (BluetoothManager) activity.getSystemService(Context.BLUETOOTH_SERVICE);
+        BluetoothManager bluetoothManager = (BluetoothManager) context.getSystemService(Context.BLUETOOTH_SERVICE);
         if (bluetoothManager == null) {
             return false;
         }
@@ -250,14 +356,13 @@ public class RevScanStateMachine {
         }
 
         REVRobotFinder.getInstance().setBluetoothAdapter(bluetoothAdapter);
-        REVRobotFinder.getInstance().setApplicationContext(activity);
+        REVRobotFinder.getInstance().setApplicationContext(context);
         return true;
     }
 
     private void registerFinderReceiver() {
-        Activity activity = getHostActivity();
         isRevFinderReceiverRegistered = BroadcastReceiverUtils.registerReceiver(
-                activity,
+                appContext,
                 revFinderBroadcastReceiver,
                 REVRobotFinder.getRevRobotFinderIntentFilter(),
                 isRevFinderReceiverRegistered,
@@ -266,9 +371,8 @@ public class RevScanStateMachine {
     }
 
     private void unregisterFinderReceiver() {
-        Activity activity = getHostActivity();
         BroadcastReceiverUtils.unregisterReceiver(
-                activity,
+                appContext,
                 revFinderBroadcastReceiver,
                 isRevFinderReceiverRegistered,
                 TAG
@@ -282,18 +386,19 @@ public class RevScanStateMachine {
             return false;
         }
 
+        activeConnectedRev = connectedRev;
         REVPlayer.getInstance().setPlayerRev(connectedRev);
-        setConnectionState(CONNECTION_CONNECTED);
+        setConnectionState(ConnectionState.CONNECTED);
         return true;
     }
 
     private boolean ensureBluetoothAdapterAvailableAndEnabled() {
-        Activity activity = getHostActivity();
-        if (activity == null) {
+        Context context = appContext;
+        if (context == null) {
             return false;
         }
 
-        BluetoothManager btManager = (BluetoothManager) activity.getSystemService(Context.BLUETOOTH_SERVICE);
+        BluetoothManager btManager = (BluetoothManager) context.getSystemService(Context.BLUETOOTH_SERVICE);
         BluetoothAdapter btAdapter = btManager != null ? btManager.getAdapter() : null;
 
         if (btAdapter == null) {
@@ -301,13 +406,20 @@ public class RevScanStateMachine {
         }
 
         if (!btAdapter.isEnabled()) {
-            try {
-                activity.startActivity(new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE));
-            } catch (ActivityNotFoundException | AndroidRuntimeException ex) {
-                Listener scanListener = getListener();
-                if (scanListener != null) {
-                    scanListener.onBluetoothEnableRequired();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                    && ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                uiEventSubject.onNext(new UiEvent(UiEventType.REQUEST_PERMISSIONS));
+                return false;
+            }
+
+            if (context instanceof Activity) {
+                try {
+                    context.startActivity(new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE));
+                } catch (ActivityNotFoundException | AndroidRuntimeException | SecurityException ex) {
+                    uiEventSubject.onNext(new UiEvent(UiEventType.REQUEST_ENABLE_BLUETOOTH));
                 }
+            } else {
+                uiEventSubject.onNext(new UiEvent(UiEventType.REQUEST_ENABLE_BLUETOOTH));
             }
             return false;
         }
@@ -326,7 +438,7 @@ public class RevScanStateMachine {
     }
 
     private void runScanStartupStepOne() {
-        if (getHostActivity() == null) {
+        if (appContext == null) {
             return;
         }
 
@@ -336,7 +448,7 @@ public class RevScanStateMachine {
     }
 
     private void runScanStartupStepTwo() {
-        if (getHostActivity() == null) {
+        if (appContext == null) {
             return;
         }
 
@@ -344,7 +456,7 @@ public class RevScanStateMachine {
         scanLeDevice(true);
         startTapTimer();
         startScanSessionTimers();
-        setConnectionState(CONNECTION_SCANNING);
+        setConnectionState(ConnectionState.SCANNING);
     }
 
     private void startTapTimer() {
@@ -393,7 +505,7 @@ public class RevScanStateMachine {
     }
 
     private void tapTimerAction() {
-        if (connectionState != CONNECTION_SCANNING && connectionState != CONNECTION_SCAN_HOLD) {
+        if (connectionState != ConnectionState.SCANNING && connectionState != ConnectionState.SCAN_HOLD) {
             return;
         }
 
@@ -416,9 +528,9 @@ public class RevScanStateMachine {
         if (closestRev != null) {
             if (closestRev.rssi >= closeRSSI) {
                 if (System.currentTimeMillis() - closestTimestamp >= connectWait) {
-                    setConnectionState(CONNECTION_CONNECTING);
+                    setConnectionState(ConnectionState.CONNECTING);
                     closestRev.setCallbackInterface(robotCallback);
-                    closestRev.connect(getHostActivity());
+                    closestRev.connect(appContext);
                     scanLeDevice(false);
                 }
             } else {
@@ -445,38 +557,38 @@ public class RevScanStateMachine {
                 REVRobot fallbackRev = new REVRobot(fallbackDevice, new ArrayList<AdRecord>(), null);
                 fallbackRev.setCallbackInterface(robotCallback);
                 pairedFallbackAttempted = true;
-                setConnectionState(CONNECTION_CONNECTING);
-                fallbackRev.connect(getHostActivity());
+                setConnectionState(ConnectionState.CONNECTING);
+                fallbackRev.connect(appContext);
                 scanLeDevice(false);
                 return;
             }
         }
 
-        if (connectionState == CONNECTION_SCANNING && closestRev != null) {
-            setConnectionState(CONNECTION_SCAN_HOLD);
-        } else if (connectionState == CONNECTION_SCAN_HOLD && closestRev == null) {
-            setConnectionState(CONNECTION_SCANNING);
+        if (connectionState == ConnectionState.SCANNING && closestRev != null) {
+            setConnectionState(ConnectionState.SCAN_HOLD);
+        } else if (connectionState == ConnectionState.SCAN_HOLD && closestRev == null) {
+            setConnectionState(ConnectionState.SCANNING);
         }
     }
 
-    private void setConnectionState(int state) {
+    private void setConnectionState(ConnectionState state) {
         if (connectionState == state) {
             return;
         }
 
         connectionState = state;
         switch (connectionState) {
-            case CONNECTION_SCANNING:
+            case SCANNING:
                 notifyStatus("Scanning for REV...", false);
                 break;
-            case CONNECTION_SCAN_HOLD:
+            case SCAN_HOLD:
                 notifyStatus("REV candidate found, preparing to connect", false);
                 connectTimestamp = System.currentTimeMillis();
                 break;
-            case CONNECTION_CONNECTING:
+            case CONNECTING:
                 notifyStatus("Connecting...", false);
                 break;
-            case CONNECTION_CONNECTED: {
+            case CONNECTED: {
                 cancelScanSessionTimers();
                 cancelTapTimer();
                 long connectDeltaTime = System.currentTimeMillis() - connectTimestamp;
@@ -489,9 +601,8 @@ public class RevScanStateMachine {
                     @Override
                     public void run() {
                         REVRobot connected = REVPlayer.getInstance().getPlayerRev();
-                        Listener scanListener = getListener();
-                        if (connected != null && scanListener != null) {
-                            scanListener.onNavigateToDriverMode(connected);
+                        if (connected != null) {
+                            uiEventSubject.onNext(new UiEvent(UiEventType.NAVIGATE_TO_DRIVER_MODE, connected));
                         }
                     }
                 }, delay + 1000);
@@ -502,24 +613,93 @@ public class RevScanStateMachine {
         }
     }
 
-    private Activity getHostActivity() {
-        return activityRef.get();
-    }
-
-    private Listener getListener() {
-        return listenerRef.get();
-    }
-
     private void notifyStatus(final String status, final boolean showRetry) {
-        final Listener scanListener = getListener();
-        if (scanListener == null) {
+        lastScanStatus = status;
+        lastScanStatusShowRetry = showRetry;
+        scanUiStateSubject.onNext(new ScanUiState(status, showRetry));
+    }
+
+    private boolean isDisconnectForActiveRev(REVRobot disconnectedRev) {
+        if (disconnectedRev == null) {
+            return false;
+        }
+
+        if (activeConnectedRev != null) {
+            return isSameRobot(activeConnectedRev, disconnectedRev);
+        }
+
+        REVRobot playerRev = REVPlayer.getInstance().getPlayerRev();
+        return isSameRobot(playerRev, disconnectedRev);
+    }
+
+    private boolean isSameRobot(REVRobot left, REVRobot right) {
+        if (left == null || right == null) {
+            return false;
+        }
+
+        if (left == right) {
+            return true;
+        }
+
+        String leftAddress = safeAddress(left);
+        String rightAddress = safeAddress(right);
+        return leftAddress != null && leftAddress.equalsIgnoreCase(rightAddress);
+    }
+
+    private String safeAddress(REVRobot robot) {
+        try {
+            return robot.getBluetoothDevice() != null ? robot.getBluetoothDevice().getAddress() : null;
+        } catch (SecurityException ex) {
+            return null;
+        }
+    }
+
+    public synchronized void bindAppLevelRevEvents() {
+        if (!appRevEventDisposables.isDisposed() && appRevEventDisposables.size() > 0) {
             return;
         }
-        handler.post(new Runnable() {
-            @Override
-            public void run() {
-                scanListener.onScanStatusChanged(status, showRetry);
-            }
-        });
+
+        appRevEventDisposables.add(
+                REVRobotEventBus.getEvents()
+                        .observeOn(Schedulers.io())
+                        .observeOn(AndroidSchedulers.mainThread())
+                        .subscribe(
+                                event -> {
+                                    if (event instanceof REVRobotEvent.DeviceDisconnected) {
+                                        REVRobot disconnectedRobot = ((REVRobotEvent.DeviceDisconnected) event).getRobot();
+                                        Log.d(TAG, "REV event: device disconnected");
+                                        onRobotDisconnected(disconnectedRobot);
+                                    }
+                                },
+                                error -> Log.e(TAG, "REV event stream error", error)
+                        )
+        );
     }
+
+    public synchronized void unbindAppLevelRevEvents() {
+        appRevEventDisposables.clear();
+    }
+
+    public synchronized void emitUiEventForSimulator(UiEventType type) {
+        if (type == UiEventType.PRIMARY_REV_DISCONNECTED) {
+            pendingPrimaryDisconnectUi = true;
+            uiEventSubject.onNext(new UiEvent(type));
+            return;
+        }
+
+        if (type == UiEventType.NAVIGATE_TO_DRIVER_MODE) {
+            REVRobot connected = activeConnectedRev != null ? activeConnectedRev : REVPlayer.getInstance().getPlayerRev();
+            uiEventSubject.onNext(new UiEvent(type, connected));
+            return;
+        }
+
+        uiEventSubject.onNext(new UiEvent(type));
+    }
+
+    private void requestPrimaryDisconnectUi() {
+        pendingPrimaryDisconnectUi = true;
+        uiEventSubject.onNext(new UiEvent(UiEventType.PRIMARY_REV_DISCONNECTED));
+    }
+
 }
+
