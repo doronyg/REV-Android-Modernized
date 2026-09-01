@@ -2,11 +2,15 @@ package com.wowwee.revandroidsampleproject.fragments
 
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
+import android.graphics.Color
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.drawable.LayerDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
@@ -15,24 +19,28 @@ import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.annotation.ColorInt
 import androidx.appcompat.app.AlertDialog
 import com.wowwee.bluetoothrobotcontrollib.rev.REVCommandValues.kRevSendIRCommand
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotConstant
+import com.wowwee.revandroidsampleproject.MainActivity
 import com.wowwee.revandroidsampleproject.R
+import com.wowwee.revandroidsampleproject.carprofile.CarProfileUiCoordinator
 import com.wowwee.revandroidsampleproject.network.GameEventType
-import com.wowwee.revandroidsampleproject.network.GameStatePacket
 import com.wowwee.revandroidsampleproject.pvp.GameSessionCoordinator
 import com.wowwee.revandroidsampleproject.pvp.PvpEvent
 import com.wowwee.revandroidsampleproject.robot.REVRobotEvent
 import com.wowwee.revandroidsampleproject.robot.REVRobotEvent.BatteryInfoReceived
 import com.wowwee.revandroidsampleproject.robot.REVRobotEvent.RobotCommandProcessed
+import com.wowwee.revandroidsampleproject.simulator.SimulatorEventDispatcher
+import com.wowwee.revandroidsampleproject.simulator.SimulatorEventMenu
+import com.wowwee.revandroidsampleproject.simulator.SimulatorModeController
 import com.wowwee.revandroidsampleproject.utils.AppPreferences
 import com.wowwee.revandroidsampleproject.utils.DriveCommandSampler
 import com.wowwee.revandroidsampleproject.utils.HapticUtils
 import com.wowwee.revandroidsampleproject.utils.JoystickView
 import com.wowwee.revandroidsampleproject.utils.Player
-import com.wowwee.revandroidsampleproject.utils.RevConnectionStateMachine
 import com.wowwee.revandroidsampleproject.utils.SoundEffects
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
 import io.reactivex.rxjava3.disposables.CompositeDisposable
@@ -43,6 +51,7 @@ import kotlin.math.sqrt
 class AdvancedDrivingFragment : ConnectedRevFragment() {
 
     companion object {
+        private const val TAG = "AdvancedDriving"
         private const val ARG_DEVICE_ADDRESS = "arg_device_address"
         private const val DRIVE_LOOP_MS = 80L
         private const val DEFAULT_DRIVE_SPEED = 1.0f
@@ -55,6 +64,7 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         private const val HIT_SHAKE_MS = 420L
         private const val HIT_VIBRATION_DURATION = 220L
         private const val POINT_SCORED_SOUND_DELAY_MS = 1000L
+        private const val AUTO_START_DELAY_MS = 4000L
         private const val DEFAULT_HIT_DAMAGE = 1
         private const val UNKNOWN_ATTACKER_ID = "UNKNOWN"
         private const val DRAWABLE_LEVEL_MAX = 10000
@@ -80,6 +90,8 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
     private lateinit var btnMode: Button
     private lateinit var tvBatteryLevel: TextView
     private lateinit var tvTitle: TextView
+    private lateinit var ivLocalCarBadge: ImageView
+    private lateinit var ivRemoteCarBadge: ImageView
     private lateinit var hitSplashOverlay: View
 
     private var wheelPointerId: Int = MotionEvent.INVALID_POINTER_ID
@@ -91,21 +103,29 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
     private var fireCooldownAnimator: ValueAnimator? = null
     private var hitStunUntilMs: Long = 0L
     private var fireCooldownUntilMs: Long = 0L
-    private var localHitsTakenCount: Int = 0
-    private var otherPlayerHitsTakenCount: Int = 0
-    private var localPlayerId: String? = null
-    private var isWaitingForGameAck: Boolean = false
-    private var isSessionActive: Boolean = false
     private var fireButtonLayers: LayerDrawable? = null
     private var batteryPillLayers: LayerDrawable? = null
 
     private val movementVector = floatArrayOf(0f, 0f)
     private val sendVector = floatArrayOf(0f, 0f)
     private val pvpDisposables = CompositeDisposable()
+    private val simulatorModeController = SimulatorModeController()
+    private val simulatorEventDispatcher = SimulatorEventDispatcher(
+        currentRemoteHits = { GameSessionCoordinator.currentViewState().remoteHitsTaken },
+        onLocalHit = { triggerSimulatedHit() },
+        onLocalBump = { handleBumpEvent() }
+    )
 
     private val driveHandler = Handler(Looper.getMainLooper())
     private val clearHitStunRunnable = Runnable { clearHitStun() }
     private val clearFireCooldownRunnable = Runnable { clearFireCooldown() }
+    private val autoStartRunnable = Runnable {
+        val state = GameSessionCoordinator.currentViewState()
+        if (!state.isSessionActive && !state.isStartPending) {
+            Log.i(TAG, "autoStart trigger: no active session after delay")
+            startGameAndWaitForAck()
+        }
+    }
     private val driveLoopRunnable = object : Runnable {
         override fun run() {
             sendDriveTick()
@@ -134,6 +154,8 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         btnMode = view.findViewById(R.id.btnMode)
         tvBatteryLevel = view.findViewById(R.id.tvBatteryLevel)
         tvTitle = view.findViewById(R.id.tvDriverModeTitle)
+        ivLocalCarBadge = view.findViewById(R.id.ivLocalCarBadge)
+        ivRemoteCarBadge = view.findViewById(R.id.ivRemoteCarBadge)
         hitSplashOverlay = view.findViewById(R.id.hitSplashOverlay)
 
         fireButtonLayers = (btnFire.background as? LayerDrawable)
@@ -169,9 +191,7 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         btnMode.setOnClickListener {
             showModeMenu()
         }
-        btnStartGame.setOnClickListener {
-            startGameAndWaitForAck()
-        }
+        btnStartGame.visibility = View.GONE
 
         return view
     }
@@ -185,9 +205,15 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         switchToDriverMode()
         updateDriverTitle()
         updateStartGameButtonState()
+        refreshCarBadgeColorsFromProfile()
+        updateCarColorBadges()
+        updateCarBadgeVisibility()
+        Log.i(TAG, "onResume startButton visible=${btnStartGame.visibility == View.VISIBLE} enabled=${btnStartGame.isEnabled} text=${btnStartGame.text}")
         maybeShowFirstTimeInstructions()
         bindPvpEventsIfNeeded()
         rev?.revGetBatteryLevel()
+        maybePromptForCarProfileIfMissing()
+        scheduleAutoStartIfNeeded()
 
         driveHandler.removeCallbacks(driveLoopRunnable)
         driveHandler.post(driveLoopRunnable)
@@ -219,6 +245,7 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
 
     private fun showModeMenu() {
         val context = context ?: return
+        val gameStatusLabel = gameStatusMenuLabel()
         val kioskToggleLabel = getString(kioskModeToggleLabelResId())
         val soundToggleLabel = getString(
             if (SoundEffects.isSoundEnabled()) {
@@ -229,7 +256,13 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         )
         val deviceAddress = currentDeviceAddress(ARG_DEVICE_ADDRESS)
         val modeOptions = DrivingModeSwitch.modeOptionsExcluding(DrivingModeOption.ADVANCED)
-        val labels = mutableListOf(kioskToggleLabel, getString(R.string.driver_mode_help), soundToggleLabel)
+        val labels = mutableListOf(
+            gameStatusLabel,
+            kioskToggleLabel,
+            getString(R.string.driver_mode_help),
+            soundToggleLabel,
+            getString(R.string.advanced_mode_edit_car_profile)
+        )
         val simulatorMenuIndex = if (isSimulatorMode()) labels.size else -1
         if (isSimulatorMode()) {
             labels.add(getString(R.string.advanced_mode_simulator_menu))
@@ -240,17 +273,27 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
             .setTitle(R.string.driver_mode_menu_title)
             .setItems(labels.toTypedArray()) { _, which ->
                 if (which == 0) {
-                    toggleKioskLockDisabledByUser()
+                    startGameAndWaitForAck()
                     return@setItems
                 }
 
                 if (which == 1) {
-                    showDriverInstructions()
+                    toggleKioskLockDisabledByUser()
                     return@setItems
                 }
 
                 if (which == 2) {
+                    showDriverInstructions()
+                    return@setItems
+                }
+
+                if (which == 3) {
                     SoundEffects.setSoundEnabled(!SoundEffects.isSoundEnabled())
+                    return@setItems
+                }
+
+                if (which == 4) {
+                    openCarProfileEditor()
                     return@setItems
                 }
 
@@ -259,7 +302,7 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
                     return@setItems
                 }
 
-                val modeStartIndex = if (simulatorMenuIndex >= 0) 4 else 3
+                val modeStartIndex = if (simulatorMenuIndex >= 0) 6 else 5
                 val selectedMode = modeOptions.getOrNull(which - modeStartIndex) ?: return@setItems
                 DrivingModeSwitch.switchToMode(this, selectedMode, deviceAddress)
             }
@@ -268,32 +311,9 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
 
     private fun showSimulatorEventMenu() {
         val context = context ?: return
-        val labels = arrayOf(
-            getString(R.string.advanced_mode_simulate_hit),
-            getString(R.string.advanced_mode_simulate_other_hit),
-            getString(R.string.advanced_mode_simulate_bump),
-            getString(R.string.simulator_event_request_permissions),
-            getString(R.string.simulator_event_request_enable_bluetooth),
-            getString(R.string.simulator_event_discovery_recommended),
-            getString(R.string.simulator_event_navigate_driver_mode),
-            getString(R.string.simulator_event_primary_disconnected)
-        )
-
-        AlertDialog.Builder(context)
-            .setTitle(R.string.advanced_mode_simulator_menu)
-            .setItems(labels) { _, which ->
-                when (which) {
-                    0 -> triggerSimulatedHit()
-                    1 -> triggerSimulatedOtherPlayerHit()
-                    2 -> triggerSimulatedBump()
-                    3 -> RevConnectionStateMachine.getInstance().emitUiEventForSimulator(RevConnectionStateMachine.UiEventType.REQUEST_PERMISSIONS)
-                    4 -> RevConnectionStateMachine.getInstance().emitUiEventForSimulator(RevConnectionStateMachine.UiEventType.REQUEST_ENABLE_BLUETOOTH)
-                    5 -> RevConnectionStateMachine.getInstance().emitUiEventForSimulator(RevConnectionStateMachine.UiEventType.DISCOVERY_RECOMMENDED)
-                    6 -> RevConnectionStateMachine.getInstance().emitUiEventForSimulator(RevConnectionStateMachine.UiEventType.NAVIGATE_TO_DRIVER_MODE)
-                    7 -> RevConnectionStateMachine.getInstance().emitUiEventForSimulator(RevConnectionStateMachine.UiEventType.PRIMARY_REV_DISCONNECTED)
-                }
-            }
-            .show()
+        SimulatorEventMenu.show(context) { action ->
+            simulatorEventDispatcher.dispatch(action)
+        }
     }
 
     override fun onPause() {
@@ -301,6 +321,7 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         driveHandler.removeCallbacks(clearHitStunRunnable)
         driveHandler.removeCallbacks(clearFireCooldownRunnable)
         driveHandler.removeCallbacks(driveLoopRunnable)
+        driveHandler.removeCallbacks(autoStartRunnable)
         pvpDisposables.clear()
         fireCooldownAnimator?.cancel()
         fireCooldownAnimator = null
@@ -332,46 +353,60 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
     private fun onPvpEvent(event: PvpEvent) {
         when (event) {
             is PvpEvent.GameSessionActive -> {
-                localPlayerId = event.localId
-                isWaitingForGameAck = false
-                isSessionActive = true
-                updateStartGameButtonState()
+                renderSessionState()
             }
 
             is PvpEvent.RemotePlayerStateUpdated -> {
-                handleRemotePlayerStateUpdate(event.packet)
+                if (event.packet.eventType == GameEventType.IR_HIT_TAKEN) {
+                    driveHandler.postDelayed({ SoundEffects.playPointScored() }, POINT_SCORED_SOUND_DELAY_MS)
+                }
             }
 
             is PvpEvent.PvpNetworkError -> {
-                if (isWaitingForGameAck) {
-                    isWaitingForGameAck = false
-                    updateStartGameButtonState()
-                }
+                updateStartGameButtonState()
+                tvTitle.text = getString(
+                    R.string.advanced_mode_title_format,
+                    getString(R.string.advanced_mode_network_retry_suffix, displayLocalName())
+                )
             }
 
             else -> Unit
         }
     }
 
+    private fun renderSessionState() {
+        updateCarColorBadges()
+        updateCarBadgeVisibility()
+        updateStartGameButtonState()
+        updateDriverTitle()
+    }
+
     private fun startGameAndWaitForAck() {
-        if (isWaitingForGameAck) {
+        val state = GameSessionCoordinator.currentViewState()
+        if (state.isSessionActive) {
+            Log.d(TAG, "startGame ignored: session already active")
             return
         }
-        isSessionActive = false
-        isWaitingForGameAck = true
+        if (state.isStartPending) {
+            Log.d(TAG, "startGame ignored: already waiting for ACK")
+            return
+        }
+        Log.i(TAG, "startGame requested from UI localId=${state.localId ?: "unknown"}")
         updateStartGameButtonState()
         GameSessionCoordinator.startGame()
+        updateStartGameButtonState()
     }
 
     private fun updateStartGameButtonState() {
+        val state = GameSessionCoordinator.currentViewState()
         when {
-            isSessionActive -> {
+            state.isSessionActive -> {
                 btnStartGame.isEnabled = true
                 btnStartGame.text = getString(R.string.advanced_mode_start_game_active_short)
                 btnStartGame.alpha = 1f
             }
 
-            isWaitingForGameAck -> {
+            state.isStartPending -> {
                 btnStartGame.isEnabled = false
                 btnStartGame.text = getString(R.string.advanced_mode_start_game_waiting_short)
                 btnStartGame.alpha = 0.8f
@@ -383,36 +418,130 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
                 btnStartGame.alpha = 1f
             }
         }
+        Log.d(
+            TAG,
+            "startButton state active=${state.isSessionActive} waitingAck=${state.isStartPending} enabled=${btnStartGame.isEnabled} text=${btnStartGame.text}"
+        )
+        updateCarBadgeVisibility()
     }
 
-    private fun handleRemotePlayerStateUpdate(packet: GameStatePacket) {
-        if (packet.eventType != GameEventType.IR_HIT_TAKEN) {
-            return
+    private fun gameStatusMenuLabel(): String {
+        val state = GameSessionCoordinator.currentViewState()
+        return when {
+            state.isSessionActive -> getString(R.string.advanced_mode_menu_game_status_on)
+            state.isStartPending -> getString(R.string.advanced_mode_menu_game_status_waiting)
+            else -> getString(R.string.advanced_mode_menu_game_status_start)
         }
-        val localIdSnapshot = localPlayerId
-        if (!localIdSnapshot.isNullOrBlank() && packet.senderId == localIdSnapshot) {
-            return
-        }
-        if (localIdSnapshot.isNullOrBlank() && packet.senderId == displayRevName()) {
-            return
-        }
+    }
 
-        otherPlayerHitsTakenCount = packet.totalHitsReceived.coerceAtLeast(0)
-        updateDriverTitle()
-        driveHandler.postDelayed({ SoundEffects.playPointScored() }, POINT_SCORED_SOUND_DELAY_MS)
+    private fun scheduleAutoStartIfNeeded() {
+        driveHandler.removeCallbacks(autoStartRunnable)
+        val state = GameSessionCoordinator.currentViewState()
+        if (state.isSessionActive || state.isStartPending) {
+            return
+        }
+        driveHandler.postDelayed(autoStartRunnable, AUTO_START_DELAY_MS)
+        Log.d(TAG, "autoStart scheduled in ${AUTO_START_DELAY_MS}ms")
     }
 
     private fun updateDriverTitle() {
-        if (localHitsTakenCount == 0 && otherPlayerHitsTakenCount == 0) {
-            tvTitle.text = getString(R.string.advanced_mode_title_format, displayRevName())
+        val state = GameSessionCoordinator.currentViewState()
+        if (!state.isSessionActive) {
+            tvTitle.text = getString(R.string.advanced_mode_title)
             return
         }
         tvTitle.text = getString(
-            R.string.advanced_mode_title_score_format,
-            displayRevName(),
-            localHitsTakenCount,
-            otherPlayerHitsTakenCount
+            R.string.advanced_mode_title_score_compact_format,
+            state.localHitsTaken,
+            state.remoteHitsTaken
         )
+    }
+
+    private fun updateCarBadgeVisibility() {
+        val visibility = if (GameSessionCoordinator.currentViewState().isSessionActive) View.VISIBLE else View.GONE
+        ivLocalCarBadge.visibility = visibility
+        ivRemoteCarBadge.visibility = visibility
+    }
+
+    private fun displayLocalName(): String {
+        val state = GameSessionCoordinator.currentViewState()
+        return state.localDisplayName.takeIf { it.isNotBlank() } ?: displayRevName()
+    }
+
+    private fun maybePromptForCarProfileIfMissing() {
+        if (
+            CarProfileUiCoordinator.shouldPromptForMissingProfile(
+                context = context,
+                isSimulatorMode = isSimulatorMode(),
+                currentDeviceAddress = currentDeviceAddress(ARG_DEVICE_ADDRESS)
+            )
+        ) {
+            openCarProfileEditor()
+        }
+    }
+
+    private fun openCarProfileEditor() {
+        val context = context ?: return
+        CarProfileUiCoordinator.openCarProfileEditor(
+            context = context,
+            isSimulatorMode = isSimulatorMode(),
+            currentDeviceAddress = currentDeviceAddress(ARG_DEVICE_ADDRESS),
+            displayRevName = displayRevName(getString(R.string.scan_profile_default_car_name)),
+            simulatorModeController = simulatorModeController,
+            onUiRefresh = {
+                updateCarColorBadges()
+                updateDriverTitle()
+            },
+            onSimulatorProfileSaved = { id, name, colorHex ->
+                (activity as? MainActivity)?.onSimulatorIdentityConnected(id, name, colorHex)
+            },
+            onPrimaryProfileSaved = { carId, displayName, colorHex ->
+                (activity as? MainActivity)?.onPrimaryRevConnected(carId, displayName, colorHex)
+            }
+        )
+    }
+
+    private fun refreshCarBadgeColorsFromProfile() {
+        // Colors are rendered from state-machine snapshot; this method keeps existing lifecycle call sites stable.
+        updateCarColorBadges()
+    }
+
+    private fun updateCarColorBadges() {
+        val state = GameSessionCoordinator.currentViewState()
+        val localFallback = CarProfileUiCoordinator.preferredLocalColorHex(
+            context = context,
+            isSimulatorMode = isSimulatorMode(),
+            currentDeviceAddress = currentDeviceAddress(ARG_DEVICE_ADDRESS),
+            fallbackHex = "#3F51B5"
+        )
+        val localColor = parseColorInt(state.localColorHex, localFallback)
+        val remoteColor = parseColorInt(state.remoteColorHex, "#F44336")
+        recolorCarBody(ivLocalCarBadge, localColor)
+        recolorCarBody(ivRemoteCarBadge, remoteColor)
+    }
+
+    private fun parseColorInt(colorHex: String?, fallbackHex: String): Int {
+        val candidate = colorHex?.trim().takeUnless { it.isNullOrEmpty() } ?: fallbackHex
+        return try {
+            Color.parseColor(candidate)
+        } catch (_: IllegalArgumentException) {
+            Color.parseColor(fallbackHex)
+        }
+    }
+
+    private fun recolorCarBody(imageView: ImageView, @ColorInt targetColor: Int) {
+        val r = Color.red(targetColor) / 255f
+        val g = Color.green(targetColor) / 255f
+        val b = Color.blue(targetColor) / 255f
+
+        val matrixArray = floatArrayOf(
+            1f - r, r * 0.5f, r * 0.5f, 0f, 0f,
+            0f, g, 0f, 0f, 0f,
+            0f, 0f, b, 0f, 0f,
+            0f, 0f, 0f, 1f, 0f
+        )
+
+        imageView.colorFilter = ColorMatrixColorFilter(ColorMatrix(matrixArray))
     }
 
     private fun handleDriveTouch(event: MotionEvent): Boolean {
@@ -690,7 +819,6 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         Player.getInstance().getShot(robot, irCommand, activity)
         SoundEffects.playLaserHit()
         GameSessionCoordinator.registerHitTaken(UNKNOWN_ATTACKER_ID, DEFAULT_HIT_DAMAGE)
-        localHitsTakenCount += 1
         updateDriverTitle()
 
         startHitStun()
@@ -701,21 +829,6 @@ class AdvancedDrivingFragment : ConnectedRevFragment() {
         handleRevDidReceiveIRCommand(robot = null, irCommand = 0, rxSensor = 3)
     }
 
-    private fun triggerSimulatedOtherPlayerHit() {
-        val simulatedPacket = GameStatePacket(
-            senderId = "SIM_REMOTE",
-            packetId = SystemClock.uptimeMillis(),
-            timestamp = System.currentTimeMillis(),
-            health = 100,
-            eventType = GameEventType.IR_HIT_TAKEN,
-            totalHitsReceived = otherPlayerHitsTakenCount + 1
-        )
-        onPvpEvent(PvpEvent.RemotePlayerStateUpdated(simulatedPacket))
-    }
-
-    private fun triggerSimulatedBump() {
-        handleBumpEvent()
-    }
 
     private fun handleBumpEvent() {
         SoundEffects.playBump()

@@ -2,6 +2,8 @@ package com.wowwee.revandroidsampleproject.utils
 
 import android.content.Context
 import androidx.core.content.edit
+import java.util.Locale
+import kotlin.random.Random
 
 private const val DEFAULT_KIOSK_MODE_ON = true
 
@@ -15,6 +17,11 @@ object AppPreferences {
     private const val PREF_KIOSK_ENABLE_ALLOWED_AT_MS = "kiosk_enable_allowed_at_ms"
     private const val PREF_KIOSK_LOCK_GLOBALLY_ENABLED = "kiosk_lock_globally_enabled"
     private const val PREF_KIOSK_LOCK_DISABLED_BY_USER = "kiosk_lock_disabled_by_user"
+    private const val PREF_LAST_PRIMARY_CAR_ID = "last_primary_car_id"
+    private const val PREF_SIMULATOR_ASSIGNED_REV_NAME = "simulator_assigned_rev_name"
+    private const val PREF_CAR_PROFILE_NAME_PREFIX = "car_profile_name_"
+    private const val PREF_CAR_PROFILE_COLOR_PREFIX = "car_profile_color_"
+    private const val DEFAULT_CAR_COLOR_HEX = "#3F51B5"
 
     @JvmStatic
     fun hasConnectedRevBefore(context: Context?): Boolean =
@@ -80,6 +87,65 @@ object AppPreferences {
     }
 
     @JvmStatic
+    fun setLastPrimaryCarId(context: Context?, carId: String?) {
+        val normalized = carId?.trim()?.takeIf { it.isNotEmpty() }
+        putString(context, PREF_LAST_PRIMARY_CAR_ID, normalized)
+    }
+
+    @JvmStatic
+    fun lastPrimaryCarId(context: Context?): String? {
+        return getString(context, PREF_LAST_PRIMARY_CAR_ID, null)?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
+    @JvmStatic
+    fun defaultCarColorHex(): String = DEFAULT_CAR_COLOR_HEX
+
+    @JvmStatic
+    fun getOrCreateSimulatorAssignedRevName(context: Context?): String {
+        val existing = getString(context, PREF_SIMULATOR_ASSIGNED_REV_NAME, null)
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+        if (existing != null) {
+            return existing
+        }
+
+        val generated = "REV-${Random.nextInt(1000, 10000)}"
+        putString(context, PREF_SIMULATOR_ASSIGNED_REV_NAME, generated)
+        return generated
+    }
+
+    @JvmStatic
+    fun saveCarProfile(context: Context?, carId: String, displayName: String, colorHex: String) {
+        val normalizedCarId = normalizeCarId(carId) ?: return
+        putString(context, PREF_CAR_PROFILE_NAME_PREFIX + normalizedCarId, displayName.trim())
+        putString(context, PREF_CAR_PROFILE_COLOR_PREFIX + normalizedCarId, normalizeColorHex(colorHex))
+    }
+
+    @JvmStatic
+    fun carProfileName(context: Context?, carId: String, fallbackName: String): String {
+        val normalizedCarId = normalizeCarId(carId) ?: return fallbackName
+        return getString(context, PREF_CAR_PROFILE_NAME_PREFIX + normalizedCarId, fallbackName)
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: fallbackName
+    }
+
+    @JvmStatic
+    fun carProfileColorHex(context: Context?, carId: String, fallbackColorHex: String = DEFAULT_CAR_COLOR_HEX): String {
+        val normalizedCarId = normalizeCarId(carId) ?: return normalizeColorHex(fallbackColorHex)
+        val stored = getString(context, PREF_CAR_PROFILE_COLOR_PREFIX + normalizedCarId, fallbackColorHex)
+        return normalizeColorHex(stored)
+    }
+
+    @JvmStatic
+    fun hasCarProfile(context: Context?, carId: String): Boolean {
+        val normalizedCarId = normalizeCarId(carId) ?: return false
+        val hasName = !getString(context, PREF_CAR_PROFILE_NAME_PREFIX + normalizedCarId, null).isNullOrBlank()
+        val hasColor = !getString(context, PREF_CAR_PROFILE_COLOR_PREFIX + normalizedCarId, null).isNullOrBlank()
+        return hasName || hasColor
+    }
+
+    @JvmStatic
     fun getBoolean(context: Context?, key: String, defaultValue: Boolean): Boolean {
         val prefs = prefs(context) ?: return defaultValue
         return prefs.getBoolean(key, defaultValue)
@@ -117,4 +183,15 @@ object AppPreferences {
 
     private fun prefs(context: Context?) =
         context?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    private fun normalizeCarId(carId: String?): String? {
+        val raw = carId?.trim()?.uppercase(Locale.US) ?: return null
+        if (raw.isEmpty()) return null
+        return raw.replace(Regex("[^A-Z0-9]"), "_")
+    }
+
+    private fun normalizeColorHex(colorHex: String?): String {
+        val candidate = colorHex?.trim()?.uppercase(Locale.US) ?: return DEFAULT_CAR_COLOR_HEX
+        return if (Regex("^#[0-9A-F]{6}$").matches(candidate)) candidate else DEFAULT_CAR_COLOR_HEX
+    }
 }

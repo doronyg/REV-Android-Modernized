@@ -13,6 +13,8 @@ import com.wowwee.revandroidsampleproject.MainActivity;
 import com.wowwee.revandroidsampleproject.R;
 import com.wowwee.revandroidsampleproject.robot.REVRobotEvent;
 import com.wowwee.revandroidsampleproject.robot.REVRobotEventBus;
+import com.wowwee.revandroidsampleproject.simulator.SimulatorIdentity;
+import com.wowwee.revandroidsampleproject.simulator.SimulatorModeController;
 import com.wowwee.revandroidsampleproject.utils.AppPreferences;
 import com.wowwee.revandroidsampleproject.utils.PermissionsFlowHelper;
 import com.wowwee.revandroidsampleproject.utils.REVPlayer;
@@ -27,6 +29,7 @@ public class ScanFragment extends BaseViewFragment {
     private static final String TAG = "REV-ScanFragment";
 
     private final RevConnectionStateMachine scanStateMachine = RevConnectionStateMachine.getInstance();
+    private final SimulatorModeController simulatorController = new SimulatorModeController();
 
     private TextView tvScanStatus;
     private Button btnScanRetry;
@@ -66,15 +69,12 @@ public class ScanFragment extends BaseViewFragment {
         super.onResume();
         Log.d(TAG, "onResume() start.");
 
-        if (REVPlayer.getInstance().isSimulatorMode()) {
+        if (simulatorController.isEnabled()) {
             updateScanStatus(getString(R.string.scan_status_simulator_ready), false);
             shouldShowDiscoveryButton = false;
             updateDiscoveryButtonVisibility();
             btnScanSimulator.setText(R.string.scan_disable_simulator);
-            if (getActivity() instanceof MainActivity) {
-                String simulatorId = "SIMULATOR:" + REVPlayer.getInstance().getSimulatorName();
-                ((MainActivity) getActivity()).onSimulatorIdentityConnected(simulatorId);
-            }
+            simulatorController.connectIfEnabled(getActivity(), asMainActivity(), getString(R.string.scan_simulator_default_name));
             return;
         }
 
@@ -91,14 +91,14 @@ public class ScanFragment extends BaseViewFragment {
         super.onPause();
         revEventDisposables.clear();
         connectionUiDisposables.clear();
-        if (!REVPlayer.getInstance().isSimulatorMode()) {
+        if (!simulatorController.isEnabled()) {
             scanStateMachine.stop();
         }
     }
 
     private void openSimulatorMode() {
-        if (REVPlayer.getInstance().isSimulatorMode()) {
-            REVPlayer.getInstance().setSimulatorMode(false);
+        if (simulatorController.isEnabled()) {
+            simulatorController.disable();
             updateScanStatus(getString(R.string.scan_status_preparing), false);
             shouldShowDiscoveryButton = !AppPreferences.hasConnectedRevBefore(getActivity());
             updateDiscoveryButtonVisibility();
@@ -109,12 +109,13 @@ public class ScanFragment extends BaseViewFragment {
             return;
         }
 
-        REVPlayer.getInstance().setSimulatorMode(true);
-        REVPlayer.getInstance().setPlayerRev(null);
-        REVPlayer.getInstance().setSimulatorName(getString(R.string.scan_simulator_default_name));
-        if (getActivity() instanceof MainActivity) {
-            String simulatorId = "SIMULATOR:" + REVPlayer.getInstance().getSimulatorName();
-            ((MainActivity) getActivity()).onSimulatorIdentityConnected(simulatorId);
+        SimulatorIdentity identity = simulatorController.enableWithStoredIdentity(getActivity(), getString(R.string.scan_simulator_default_name));
+        if (identity == null) {
+            return;
+        }
+        MainActivity activity = asMainActivity();
+        if (activity != null) {
+            activity.onSimulatorIdentityConnected(identity.getId(), identity.getName(), identity.getColorHex());
         }
         scanStateMachine.stop();
         btnScanSimulator.setText(R.string.scan_disable_simulator);
@@ -189,8 +190,19 @@ public class ScanFragment extends BaseViewFragment {
         REVPlayer.getInstance().setPlayerRev(connectedRev);
         AppPreferences.markHasConnectedRev(getActivity());
         String connectedRevAddress = safeRevAddress(connectedRev);
+        String connectedRevName = connectedRev != null ? connectedRev.getName() : null;
+        String fallbackName = connectedRevName != null && !connectedRevName.trim().isEmpty()
+            ? connectedRevName
+            : getString(R.string.scan_profile_default_car_name);
+        AppPreferences.setLastPrimaryCarId(getActivity(), connectedRevAddress);
         if (getActivity() instanceof MainActivity) {
-            ((MainActivity) getActivity()).onPrimaryRevConnected(connectedRevAddress);
+            String profileName = connectedRevAddress != null && AppPreferences.hasCarProfile(getActivity(), connectedRevAddress)
+                ? AppPreferences.carProfileName(getActivity(), connectedRevAddress, fallbackName)
+                : fallbackName;
+            String profileColor = connectedRevAddress != null && AppPreferences.hasCarProfile(getActivity(), connectedRevAddress)
+                ? AppPreferences.carProfileColorHex(getActivity(), connectedRevAddress, AppPreferences.defaultCarColorHex())
+                : AppPreferences.defaultCarColorHex();
+            ((MainActivity) getActivity()).onPrimaryRevConnected(connectedRevAddress, profileName, profileColor);
         }
         FragmentHelper.switchFragment(getFragmentActivity().getSupportFragmentManager(), AdvancedDrivingFragment.newInstance(connectedRevAddress), R.id.view_id_content, false);
     }
@@ -212,5 +224,9 @@ public class ScanFragment extends BaseViewFragment {
             return;
         }
         btnScanDiscovery.setVisibility(shouldShowDiscoveryButton ? View.VISIBLE : View.GONE);
+    }
+
+    private MainActivity asMainActivity() {
+        return getActivity() instanceof MainActivity ? (MainActivity) getActivity() : null;
     }
 }

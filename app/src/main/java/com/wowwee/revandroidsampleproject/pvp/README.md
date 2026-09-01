@@ -13,8 +13,8 @@ This package contains gameplay/session mechanics for player-vs-player combat.
 
 1. Activity `onResume()` -> `GameSessionCoordinator.onHostResumed()`
 2. Activity `onPause()` -> `GameSessionCoordinator.onHostPaused()`
-3. On connected REV -> `GameSessionCoordinator.onCarConnected(revId)`
-4. On simulator mode -> `GameSessionCoordinator.onCarConnected("SIMULATOR:<name>", 8888, true)`
+3. On connected REV -> `GameSessionCoordinator.onCarConnected(revId, playerName, colorHex, port, allowSelfLoopback)`
+4. On simulator mode -> `GameSessionCoordinator.onCarConnected("SIMULATOR:<name>", simulatorName, null, 8888, true)`
 5. On disconnect -> `GameSessionCoordinator.onCarDisconnected()`
 
 Listening is active only when host is resumed and a local player identity is available.
@@ -22,9 +22,25 @@ Listening is active only when host is resumed and a local player identity is ava
 ## Session flow
 
 - Host starts with `GameSessionCoordinator.startGame(config)`.
-- Joiner accepts with `GameSessionCoordinator.acknowledgeGameStart(startPacket)`.
-- Runtime updates use `sendHeartbeat()`, `registerHitTaken(...)`, and `sendGameOver()`.
+- Joiner auto-acknowledges incoming `GAME_START` packets.
+- Runtime updates use `registerHitTaken(...)` and `sendGameOver()`.
+- If heartbeat gaps exceed the stale threshold, peers emit `RESYNC_REQUEST`; recipients answer with `STATE_SNAPSHOT`.
 
-ACK timeout/retry policies are intentionally left to higher-level app logic.
+Heartbeat is scheduled internally by `GameSessionStateMachine` while a session is active.
+
+## Data correctness
+
+- Every packet carries UTC timestamp and ordered packet id.
+- Gameplay packets are applied only when newer (timestamp / packet id / hit progression) to filter stale data.
+- Sender identity includes `senderId` (stable transport key) and display profile (`senderName`, `senderColorHex`).
+
+## Simulator testing hooks
+
+- `simulator` package now owns simulator dialogs/actions. `AdvancedDrivingFragment` only delegates menu opening.
+- `Simulator Events` menu includes:
+  - `Emit: Remote Game Start`
+  - `Emit: Stale Remote Hit Pair`
+  - Existing hit/bump and connection UI-state events.
+
 
 

@@ -5,6 +5,9 @@ enum class GameEventType {
     IR_HIT_TAKEN,
     GAME_START,
     GAME_JOIN_ACK,
-    GAME_OVER
+    GAME_OVER,
+    RESYNC_REQUEST,
+    STATE_SNAPSHOT
 }
+
 

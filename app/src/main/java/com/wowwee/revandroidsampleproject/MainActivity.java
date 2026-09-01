@@ -123,20 +123,20 @@ public class MainActivity extends FragmentActivity implements KioskLockHost {
 		BluetoothRobot.unbindBluetoothLeService(MainActivity.this);
 	}
 
-	public void onPrimaryRevConnected(@Nullable String revId) {
+	public void onPrimaryRevConnected(@Nullable String revId, @Nullable String revName, @Nullable String revColorHex) {
 		if (revId == null || revId.trim().isEmpty()) {
 			return;
 		}
 		REVRobotEventBus.attachToConnectedRobots();
-		GameSessionCoordinator.onCarConnected(revId);
+		GameSessionCoordinator.onCarConnected(revId, revName, revColorHex, 8888, false);
 	}
 
-	public void onSimulatorIdentityConnected(@Nullable String simulatorId) {
+	public void onSimulatorIdentityConnected(@Nullable String simulatorId, @Nullable String simulatorName, @Nullable String simulatorColorHex) {
 		if (simulatorId == null || simulatorId.trim().isEmpty()) {
 			return;
 		}
 		REVRobotEventBus.attachToConnectedRobots();
-		GameSessionCoordinator.onCarConnected(simulatorId, 8888, true);
+		GameSessionCoordinator.onCarConnected(simulatorId, simulatorName, simulatorColorHex, 8888, true);
 	}
 
 	public void onPrimaryRevDisconnected() {

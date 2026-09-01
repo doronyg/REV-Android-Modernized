@@ -1,7 +1,6 @@
 package com.wowwee.revandroidsampleproject.pvp
 
 import com.wowwee.revandroidsampleproject.network.GameSessionConfig
-import com.wowwee.revandroidsampleproject.network.GameStatePacket
 import com.wowwee.revandroidsampleproject.network.UdpGameEngine
 import io.reactivex.rxjava3.core.Observable
 
@@ -23,6 +22,12 @@ object GameSessionCoordinator {
     private var connectedPlayerId: String? = null
 
     @Volatile
+    private var connectedPlayerName: String? = null
+
+    @Volatile
+    private var connectedPlayerColorHex: String? = null
+
+    @Volatile
     private var requestedPort: Int = DEFAULT_PORT
 
     @Volatile
@@ -33,6 +38,12 @@ object GameSessionCoordinator {
 
     @Volatile
     private var activePlayerId: String? = null
+
+    @Volatile
+    private var activePlayerName: String? = null
+
+    @Volatile
+    private var activePlayerColorHex: String? = null
 
     @Volatile
     private var activePort: Int = DEFAULT_PORT
@@ -61,9 +72,17 @@ object GameSessionCoordinator {
 
     @JvmStatic
     @JvmOverloads
-    fun onCarConnected(revId: String, port: Int = DEFAULT_PORT, allowSelfLoopback: Boolean = false) {
+    fun onCarConnected(
+        revId: String,
+        playerName: String? = null,
+        playerColorHex: String? = null,
+        port: Int = DEFAULT_PORT,
+        allowSelfLoopback: Boolean = false
+    ) {
         synchronized(stateLock) {
             connectedPlayerId = revId.trim().takeIf { it.isNotEmpty() }
+            connectedPlayerName = playerName?.trim()?.takeIf { it.isNotEmpty() }
+            connectedPlayerColorHex = playerColorHex?.trim()?.takeIf { it.isNotEmpty() }
             requestedPort = port
             requestedSelfLoopback = allowSelfLoopback
         }
@@ -74,6 +93,8 @@ object GameSessionCoordinator {
     fun onCarDisconnected() {
         synchronized(stateLock) {
             connectedPlayerId = null
+            connectedPlayerName = null
+            connectedPlayerColorHex = null
             requestedSelfLoopback = false
         }
         refreshNetworkingState()
@@ -88,18 +109,13 @@ object GameSessionCoordinator {
     }
 
     @JvmStatic
-    fun acknowledgeGameStart(packet: GameStatePacket) {
-        stateMachine.acknowledgeGameStart(packet)
-    }
-
-    @JvmStatic
-    fun sendHeartbeat() {
-        stateMachine.sendHeartbeat()
-    }
-
-    @JvmStatic
     fun registerHitTaken(attackerRevId: String, damage: Int) {
         stateMachine.registerHitTaken(attackerRevId, damage)
+    }
+
+    @JvmStatic
+    fun currentViewState(): GameSessionViewState {
+        return stateMachine.currentViewState()
     }
 
     @JvmStatic
@@ -125,12 +141,16 @@ object GameSessionCoordinator {
     private fun refreshNetworkingState() {
         val shouldListen: Boolean
         val targetPlayerId: String?
+        val targetPlayerName: String?
+        val targetPlayerColorHex: String?
         val targetPort: Int
         val targetSelfLoopback: Boolean
 
         synchronized(stateLock) {
             shouldListen = hostResumed && !connectedPlayerId.isNullOrBlank()
             targetPlayerId = connectedPlayerId
+            targetPlayerName = connectedPlayerName
+            targetPlayerColorHex = connectedPlayerColorHex
             targetPort = requestedPort
             targetSelfLoopback = requestedSelfLoopback
         }
@@ -146,12 +166,14 @@ object GameSessionCoordinator {
         }
 
         if (!listening) {
-            stateMachine.bindLocalIdentity(playerId)
+            stateMachine.bindLocalIdentity(playerId, targetPlayerName ?: playerId, targetPlayerColorHex ?: "")
             stateMachine.attachTransport()
             UdpGameEngine.start(playerId, targetPort, targetSelfLoopback)
             synchronized(stateLock) {
                 listening = true
                 activePlayerId = playerId
+                activePlayerName = targetPlayerName
+                activePlayerColorHex = targetPlayerColorHex
                 activePort = targetPort
                 activeSelfLoopback = targetSelfLoopback
             }
@@ -159,15 +181,21 @@ object GameSessionCoordinator {
         }
 
         val requiresRestart =
-            activePlayerId != playerId || activePort != targetPort || activeSelfLoopback != targetSelfLoopback
+            activePlayerId != playerId ||
+                activePlayerName != targetPlayerName ||
+                activePlayerColorHex != targetPlayerColorHex ||
+                activePort != targetPort ||
+                activeSelfLoopback != targetSelfLoopback
 
         if (requiresRestart) {
             UdpGameEngine.stop()
-            stateMachine.bindLocalIdentity(playerId)
+            stateMachine.bindLocalIdentity(playerId, targetPlayerName ?: playerId, targetPlayerColorHex ?: "")
             UdpGameEngine.start(playerId, targetPort, targetSelfLoopback)
             synchronized(stateLock) {
                 listening = true
                 activePlayerId = playerId
+                activePlayerName = targetPlayerName
+                activePlayerColorHex = targetPlayerColorHex
                 activePort = targetPort
                 activeSelfLoopback = targetSelfLoopback
             }
@@ -183,6 +211,8 @@ object GameSessionCoordinator {
         synchronized(stateLock) {
             listening = false
             activePlayerId = null
+            activePlayerName = null
+            activePlayerColorHex = null
         }
     }
 }

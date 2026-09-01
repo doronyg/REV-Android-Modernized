@@ -89,15 +89,41 @@
             android:background="@drawable/drive_thumb_race_car" />
     </com.wowwee.revandroidsampleproject.utils.JoystickView>
 
-    <TextView
-        android:id="@+id/tvDriverModeTitle"
+    <LinearLayout
+        android:id="@+id/layoutScoreHeader"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerHorizontal="true"
         android:layout_marginTop="20dp"
-        android:text="@string/advanced_mode_title"
-        android:textColor="?android:textColorPrimary"
-        android:textSize="18sp" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:id="@+id/ivLocalCarBadge"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginEnd="10dp"
+            android:contentDescription="@string/advanced_mode_local_car_color_badge"
+            android:src="@mipmap/ic_car_example"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/tvDriverModeTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/advanced_mode_title"
+            android:textColor="?android:textColorPrimary"
+            android:textSize="18sp" />
+
+        <ImageView
+            android:id="@+id/ivRemoteCarBadge"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="10dp"
+            android:contentDescription="@string/advanced_mode_remote_car_color_badge"
+            android:src="@mipmap/ic_car_example"
+            android:visibility="gone" />
+    </LinearLayout>
 
     <Button
         android:id="@+id/btnStartGame"

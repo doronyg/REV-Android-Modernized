@@ -150,18 +150,28 @@ object UdpGameEngine {
 
     private fun isDuplicate(packet: GameStatePacket): Boolean {
         synchronized(lock) {
-            val previous = packetIdBySender[packet.senderId]
+            val dedupeKey = buildDedupeKey(packet)
+            val previous = packetIdBySender[dedupeKey]
             if (previous != null && packet.packetId <= previous) {
                 return true
             }
-            packetIdBySender[packet.senderId] = packet.packetId
-            if (packetIdBySender.size > 128) {
+            packetIdBySender[dedupeKey] = packet.packetId
+            if (packetIdBySender.size > 256) {
                 val eldestKey = packetIdBySender.entries.firstOrNull()?.key
                 if (eldestKey != null) {
                     packetIdBySender.remove(eldestKey)
                 }
             }
             return false
+        }
+    }
+
+    private fun buildDedupeKey(packet: GameStatePacket): String {
+        val instanceId = packet.senderInstanceId?.trim().orEmpty()
+        return if (instanceId.isEmpty()) {
+            packet.senderId
+        } else {
+            "${packet.senderId}#$instanceId"
         }
     }
 

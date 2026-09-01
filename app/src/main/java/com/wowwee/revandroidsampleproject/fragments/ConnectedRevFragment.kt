@@ -1,12 +1,11 @@
 package com.wowwee.revandroidsampleproject.fragments
 
-import android.os.Handler
-import android.os.Looper
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobot
 import com.wowwee.bluetoothrobotcontrollib.rev.REVRobotFinder
 import com.wowwee.revandroidsampleproject.R
 import com.wowwee.revandroidsampleproject.robot.REVRobotEvent
 import com.wowwee.revandroidsampleproject.robot.REVRobotEventBus
+import com.wowwee.revandroidsampleproject.simulator.SimulatorBatteryBridge
 import com.wowwee.revandroidsampleproject.utils.REVPlayer
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
 import io.reactivex.rxjava3.disposables.CompositeDisposable
@@ -14,18 +13,9 @@ import io.reactivex.rxjava3.schedulers.Schedulers
 
 abstract class ConnectedRevFragment : BaseViewFragment(), KioskLockInterface {
 
-    companion object {
-        private const val SIMULATOR_BATTERY_EVENT_DELAY_MS = 5000L
-        private const val SIMULATOR_BATTERY_LEVEL = 76
-        private const val SIMULATOR_BATTERY_VOLTAGE = 0
-    }
-
     private var navigationUnlocked = false
     private val revEventDisposables = CompositeDisposable()
-    private val simulatorEventHandler = Handler(Looper.getMainLooper())
-    private val simulatorBatteryEventRunnable = Runnable {
-        REVRobotEventBus.emitBatteryInfo(robot = null, batteryLevel = SIMULATOR_BATTERY_LEVEL, voltage = SIMULATOR_BATTERY_VOLTAGE)
-    }
+    private val simulatorBatteryBridge = SimulatorBatteryBridge()
 
     protected fun resolveTargetRev(argumentKey: String): REVRobot? {
         val requestedAddress : String? = arguments?.getString(argumentKey)
@@ -84,7 +74,7 @@ abstract class ConnectedRevFragment : BaseViewFragment(), KioskLockInterface {
     }
 
     override fun onPause() {
-        simulatorEventHandler.removeCallbacks(simulatorBatteryEventRunnable)
+        simulatorBatteryBridge.cancel()
         revEventDisposables.clear()
         super.onPause()
     }
@@ -138,11 +128,7 @@ abstract class ConnectedRevFragment : BaseViewFragment(), KioskLockInterface {
     }
 
     private fun scheduleSimulatorBatteryEventIfNeeded() {
-        simulatorEventHandler.removeCallbacks(simulatorBatteryEventRunnable)
-        if (!isSimulatorMode()) {
-            return
-        }
-        simulatorEventHandler.postDelayed(simulatorBatteryEventRunnable, SIMULATOR_BATTERY_EVENT_DELAY_MS)
+        simulatorBatteryBridge.scheduleIfSimulator(isSimulatorMode())
     }
 
     private fun safeAddress(robot: REVRobot?): String? {

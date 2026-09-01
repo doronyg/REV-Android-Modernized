@@ -12,6 +12,9 @@ class UdpGameEngineProtocolTest {
     fun `game state packet round trips with ack fields`() {
         val packet = GameStatePacket(
             senderId = "AA:BB:CC:DD:EE:FF",
+            senderName = "Blue Driver",
+            senderColorHex = "#3F51B5",
+            senderInstanceId = "instance-1",
             packetId = 42L,
             timestamp = 1_725_000_000_000L,
             health = 88,
@@ -24,6 +27,14 @@ class UdpGameEngineProtocolTest {
             targetId = "22:33:44:55:66:77",
             ackForPacketId = 12L,
             players = listOf("11:22:33:44:55:66", "AA:BB:CC:DD:EE:FF"),
+            participantProfiles = listOf(
+                PlayerProfile("AA:BB:CC:DD:EE:FF", "Blue Driver", "#3F51B5"),
+                PlayerProfile("11:22:33:44:55:66", "Red Driver", "#F44336")
+            ),
+            scoreByPlayer = mapOf(
+                "AA:BB:CC:DD:EE:FF" to 3,
+                "11:22:33:44:55:66" to 5
+            ),
             gameConfig = GameSessionConfig(initialHealth = 100)
         )
 
@@ -35,6 +46,10 @@ class UdpGameEngineProtocolTest {
         assertEquals(12L, decoded.ackForPacketId)
         assertEquals(1, decoded.hitHistory.size)
         assertEquals(88, decoded.health)
+        assertEquals("Blue Driver", decoded.senderName)
+        assertEquals("#3F51B5", decoded.senderColorHex)
+        assertEquals(2, decoded.participantProfiles.size)
+        assertEquals(5, decoded.scoreByPlayer["11:22:33:44:55:66"])
     }
 
     @Test
