@@ -10,6 +10,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class GameSessionStateMachineTest {
@@ -241,12 +242,128 @@ class GameSessionStateMachineTest {
             machine.detachTransport()
         }
     }
+
+    @Test
+    fun `host keeps start pending when join ack targets another player`() {
+        val machine = GameSessionStateMachine()
+        machine.bindLocalIdentity("HOST-1", "Host", "#3F51B5")
+        machine.attachTransport()
+
+        try {
+            machine.startGame(GameSessionConfig(initialHealth = 100))
+            val started = machine.currentViewState()
+            val sessionId = started.sessionId ?: error("Expected pending session id")
+
+            NetworkEventBus.publishPacket(
+                GameStatePacket(
+                    senderId = "REMOTE-1",
+                    packetId = 510L,
+                    timestamp = 51_000L,
+                    health = 100,
+                    eventType = GameEventType.GAME_JOIN_ACK,
+                    targetId = "HOST-2",
+                    sessionId = sessionId,
+                    hostId = "HOST-1",
+                    players = listOf("HOST-1", "REMOTE-1")
+                )
+            )
+
+            Thread.sleep(200)
+            val state = machine.currentViewState()
+            assertTrue(state.isStartPending)
+            assertFalse(state.isSessionActive)
+            assertEquals("HOST-1", state.localId)
+        } finally {
+            machine.detachTransport()
+        }
+    }
+
+    @Test
+    fun `host session activates on valid join ack for current session`() {
+        val machine = GameSessionStateMachine()
+        machine.bindLocalIdentity("HOST-1", "Host", "#3F51B5")
+        machine.attachTransport()
+
+        val activeLatch = CountDownLatch(1)
+        val activeScores = mutableListOf<Map<String, Int>>()
+        val disposable = PvpEventBus.events.subscribe { event ->
+            if (event is PvpEvent.GameSessionActive && event.localId == "HOST-1") {
+                activeScores.add(event.scoreByPlayer)
+                activeLatch.countDown()
+            }
+        }
+
+        try {
+            machine.startGame(GameSessionConfig(initialHealth = 100))
+            val started = machine.currentViewState()
+            val sessionId = started.sessionId ?: error("Expected pending session id")
+
+            NetworkEventBus.publishPacket(
+                GameStatePacket(
+                    senderId = "REMOTE-1",
+                    senderName = "Remote",
+                    packetId = 520L,
+                    timestamp = 52_000L,
+                    health = 100,
+                    eventType = GameEventType.GAME_JOIN_ACK,
+                    targetId = "HOST-1",
+                    sessionId = sessionId,
+                    hostId = "HOST-1",
+                    players = listOf("HOST-1", "REMOTE-1"),
+                    scoreByPlayer = mapOf("HOST-1" to 0, "REMOTE-1" to 3)
+                )
+            )
+
+            assertTrue(activeLatch.await(2, TimeUnit.SECONDS))
+            val state = machine.currentViewState()
+            assertTrue(state.isSessionActive)
+            assertEquals(3, state.scoreByPlayer["REMOTE-1"])
+            assertTrue(activeScores.isNotEmpty())
+        } finally {
+            disposable.dispose()
+            machine.detachTransport()
+        }
+    }
+
+    @Test
+    fun `state snapshot recovers inactive session and score map`() {
+        val machine = GameSessionStateMachine()
+        machine.bindLocalIdentity("LOCAL-1", "Local", "#3F51B5")
+        machine.attachTransport()
+
+        val latch = CountDownLatch(1)
+        val localScore = AtomicInteger(-1)
+        val remoteScore = AtomicInteger(-1)
+        val disposable = PvpEventBus.events.subscribe { event ->
+            if (event is PvpEvent.GameSessionActive && event.localId == "LOCAL-1") {
+                localScore.set(event.scoreByPlayer["LOCAL-1"] ?: -1)
+                remoteScore.set(event.scoreByPlayer["REMOTE-1"] ?: -1)
+                latch.countDown()
+            }
+        }
+
+        try {
+            NetworkEventBus.publishPacket(
+                GameStatePacket(
+                    senderId = "REMOTE-1",
+                    packetId = 530L,
+                    timestamp = 53_000L,
+                    health = 100,
+                    eventType = GameEventType.STATE_SNAPSHOT,
+                    sessionId = "session-snapshot-recover",
+                    hostId = "REMOTE-1",
+                    scoreByPlayer = mapOf("LOCAL-1" to 4, "REMOTE-1" to 6),
+                    players = listOf("LOCAL-1", "REMOTE-1")
+                )
+            )
+
+            assertTrue(latch.await(2, TimeUnit.SECONDS))
+            assertEquals(4, localScore.get())
+            assertEquals(6, remoteScore.get())
+        } finally {
+            disposable.dispose()
+            machine.detachTransport()
+        }
+    }
 }
-
-
-
-
-
-
-
 
